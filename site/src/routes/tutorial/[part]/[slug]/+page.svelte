@@ -1,12 +1,6 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
-
-	let index = $derived(data.part.exercises.findIndex((e) => e.slug === data.exercise.slug));
-	let prev = $derived(index > 0 ? data.part.exercises[index - 1] : null);
-	let next = $derived(
-		index >= 0 && index < data.part.exercises.length - 1 ? data.part.exercises[index + 1] : null
-	);
 </script>
 
 <svelte:head>
@@ -35,13 +29,13 @@
 {/if}
 
 <nav class="pager">
-	{#if prev}
-		<a class="prev" href="/tutorial/{data.part.slug}/{prev.slug}">← {prev.title}</a>
+	{#if data.prev}
+		<a class="prev" href="/tutorial/{data.prev.partSlug}/{data.prev.slug}">← {data.prev.title}</a>
 	{:else}
 		<span></span>
 	{/if}
-	{#if next}
-		<a class="next" href="/tutorial/{data.part.slug}/{next.slug}">{next.title} →</a>
+	{#if data.next}
+		<a class="next" href="/tutorial/{data.next.partSlug}/{data.next.slug}">{data.next.title} →</a>
 	{/if}
 </nav>
 

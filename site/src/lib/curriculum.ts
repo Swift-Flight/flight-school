@@ -283,3 +283,38 @@ export function findExercise(
 	const exercise = part?.exercises.find((e) => e.slug === exerciseSlug);
 	return part && exercise ? { part, exercise } : undefined;
 }
+
+export interface AdjacentExercise {
+	partSlug: string;
+	partTitle: string;
+	slug: string;
+	title: string;
+}
+
+/**
+ * Prev/next across the *whole* curriculum, not just within one part — the
+ * last exercise of a part points at the first exercise of the next one,
+ * rather than dead-ending. This is what the exercise page's pager uses;
+ * content itself should never hand-write "Next:" links (they drift, and
+ * they'd just be reimplementing this in prose — content/tutorial's files
+ * intentionally have none, on purpose, not by oversight).
+ */
+export function adjacentExercises(
+	partSlug: string,
+	exerciseSlug: string
+): { prev: AdjacentExercise | null; next: AdjacentExercise | null } {
+	const flat: AdjacentExercise[] = curriculum.flatMap((part) =>
+		part.exercises.map((exercise) => ({
+			partSlug: part.slug,
+			partTitle: part.title,
+			slug: exercise.slug,
+			title: exercise.title
+		}))
+	);
+	const index = flat.findIndex((e) => e.partSlug === partSlug && e.slug === exerciseSlug);
+	if (index === -1) return { prev: null, next: null };
+	return {
+		prev: index > 0 ? flat[index - 1] : null,
+		next: index < flat.length - 1 ? flat[index + 1] : null
+	};
+}

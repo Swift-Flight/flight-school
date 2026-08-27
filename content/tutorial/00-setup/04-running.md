@@ -52,5 +52,3 @@ If the in-browser editor is ever unavailable — rate-limited, or simply
 not deployed yet for a given exercise — every exercise is also a
 downloadable `flight new`-shaped project. Reading and running it locally,
 the way this page just walked through, always works.
-
-**Next:** [Part 1 — Flight basics](/tutorial/01-basics)

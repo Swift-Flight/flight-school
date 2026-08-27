@@ -64,5 +64,3 @@ never be a build you have to explain.** A `skeleton` project's
 `Package.swift` has exactly one dependency line naming exactly one trait.
 That line is the whole story of what the project depends on, and it stays
 that way until you change it.
-
-**Next:** [Project anatomy](./03-anatomy)

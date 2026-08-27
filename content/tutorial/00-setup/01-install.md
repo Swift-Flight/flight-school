@@ -59,5 +59,3 @@ tutorial's exercises are generated from. Building from source means the
 are, by construction, the same one. A packaged binary release is coming;
 until it does, `swift build -c release` *is* the install step, not a
 workaround for one.
-
-**Next:** [flight new, and the tier/trait model](./02-flight-new)

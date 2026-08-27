@@ -64,10 +64,18 @@ let repo = Repo(client: postgresClient, logger: logger)
 let posts: [Post] = try await repo.all(popular)
 ```
 
-`repo.one(query)` expects exactly one row and throws if it finds zero or
-more than one — the right shape for "fetch by primary key," where "not
-found" and "found two" are both bugs worth throwing over, not a `nil` the
-caller has to remember to check twice.
+`repo.one(query)` returns at most one row: `nil` for zero matches, the row
+for exactly one, and a thrown `HangarError.tooManyRows` for more than
+one. Zero is a legitimate outcome — "no post has that id" is completely
+ordinary — but two rows matching a query you expected to identify a
+single one is never legitimate, and `one` refuses to silently pick the
+first and hide that something's wrong:
+
+```swift
+guard let post = try await repo.one(Post.where { $0.id == id }) else {
+    throw HTTPError(.notFound, "no such post")
+}
+```
 
 ## Seeing the SQL
 

@@ -149,5 +149,3 @@ plugin looks for — no separate step registers this route anywhere.
 because there's no `default:` argument, the *build* — not a runtime
 crash — fails if that key doesn't exist. Misspell a config key and you
 find out from the compiler, not from a customer.
-
-**Next:** [Running it locally](./04-running)
