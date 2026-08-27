@@ -1,42 +1,39 @@
-# sv
+# site
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
-
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --install npm site
-```
+The Flight School frontend — SvelteKit 5, `adapter-node`. See the
+[repo root README](../README.md) for the full picture; this is
+site-specific development notes only.
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+```sh
+npm install
+npm run dev
+```
+
+Content is read from `../content` (see `src/lib/server/content.ts`) —
+there's nothing to build or watch on the content side, markdown is parsed
+per request.
+
+## Type-checking
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm run check
 ```
+
+Runs in CI on every push/PR (`.github/workflows/site.yml`) alongside a
+production build — both must stay clean.
 
 ## Building
 
-To create a production version of your app:
-
 ```sh
 npm run build
+node build/index.js
 ```
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Not `npm run preview` — that's Vite's own preview server, which doesn't
+exercise `adapter-node`'s actual output the way `node build/index.js`
+does (that distinction mattered once already: see the commit that added
+`CONTENT_ROOT` as an env var rather than a relative path). Set
+`CONTENT_ROOT` when running the built server directly, or use
+`docker compose up` from the repo root, which sets it for you.
