@@ -9,12 +9,28 @@ milestone list this maps onto.
 **Site.** SvelteKit 5 (Svelte `5.56.1`, verified — not just requested),
 `adapter-node`, deployed via `docker compose up -d` (Caddy + site).
 Content is markdown, bind-mounted into the container and read per-request
-— editing a guide takes effect on the next request, no rebuild.
+— editing a guide takes effect on the next request, no rebuild. The
+exercise pager (`adjacentExercises` in `curriculum.ts`) walks the whole
+curriculum flattened, not just the current part, so the last exercise of
+one part correctly links into the first exercise of the next — verified
+against a production build in both directions, and confirmed it composes
+correctly with the "coming soon" placeholder below (a pager can point at
+an unwritten exercise; that page still renders, with correct prev/next of
+its own).
 
-**Content, real and verified** — grounded directly in flight-cli's actual
-templates/README, not invented:
+**Content, real and verified** — grounded directly in flight source and
+flight-cli's actual templates/README, not invented:
 - Part 0 (Setup), all four exercises: install, `flight new`, project
   anatomy, running locally.
+- Part 1 (Flight basics), 8 of 9 exercises: bootstrap/modules, first
+  route, path/query parameters, request bodies, responses/HTTPError,
+  static assets, middleware, configuration. **`06-cookies` is deliberately
+  unwritten** — cookie support landed in flight's source (commit
+  `8997a5a`) but no release tag includes it yet (`v0.8.0` predates it), and
+  `flight new`'s `Package.swift` resolves `from: "0.7.0"` to the latest
+  *tagged* release. Writing this exercise now would document an API a
+  learner's own `flight new` can't reach. Revisit once flight cuts its next
+  tag; don't write it against `flight`'s HEAD in the meantime.
 - One guide: "Hangar: Getting Started."
 
 Everything else in `PLAN.md` §7's curriculum outline exists only as a
@@ -57,9 +73,9 @@ current flat files are the final shape.
 - Everything requiring either of the above: the snippet/db/app/app+db
   execution tiers, the embedded editor, "Solve" diffing, session
   presence, the preview proxy.
-- Parts 1–4 of the curriculum, and every guide except "Hangar: Getting
-  Started" — titles and descriptions exist in the manifests; the prose
-  doesn't yet.
+- Parts 2–4 of the curriculum (Part 1 is mostly written — see above), and
+  every guide except "Hangar: Getting Started" — titles and descriptions
+  exist in the manifests; the prose doesn't yet.
 - Testing content specifically (Part 3) has no proven source to adapt
   from anywhere yet — flagged in `PLAN.md` §7a as a genuine open item,
   not just unwritten.
