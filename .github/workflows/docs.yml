@@ -1,0 +1,161 @@
+name: Reference docs → GitHub Pages
+
+# PLAN §8a: flight/flight-data/hangar's own CI already *generates* DocC with
+# --warnings-as-errors (a verification gate), but nothing publishes it
+# anywhere today. This workflow is the missing half, built here rather than
+# in those repos so it doesn't touch their CI on their maintainer's behalf —
+# it clones tagged releases read-only and owns its own publish destination.
+#
+# Not triggered on every push: DocC generation across ~20+ targets across
+# three repos is not free, and reference docs don't need to move on every
+# commit to this repo's main. Run it when a referenced framework cuts a
+# release, or by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      flight_ref:
+        description: 'flight tag/branch to document'
+        default: 'main'
+      hangar_ref:
+        description: 'hangar tag/branch to document'
+        default: 'main'
+      flight_data_ref:
+        description: 'flight-data tag/branch to document'
+        default: 'main'
+  schedule:
+    # Weekly, as a floor — catches drift between releases without needing
+    # someone to remember to run this by hand. Real releases should
+    # workflow_dispatch this with the actual tag.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: swift:6.3.3
+    steps:
+      - name: Checkout flight
+        uses: actions/checkout@v4
+        with:
+          repository: Swift-Flight/flight
+          ref: ${{ inputs.flight_ref || 'main' }}
+          path: flight
+
+      - name: Checkout hangar
+        uses: actions/checkout@v4
+        with:
+          repository: Swift-Flight/hangar
+          ref: ${{ inputs.hangar_ref || 'main' }}
+          path: hangar
+
+      - name: Checkout flight-data
+        uses: actions/checkout@v4
+        with:
+          repository: Swift-Flight/flight-data
+          ref: ${{ inputs.flight_data_ref || 'main' }}
+          path: flight-data
+
+      # The base path segment MUST match where the artifact is actually
+      # served, or every relative asset link in the generated pages 404s —
+      # the single most common DocC-on-Pages mistake, and worth this
+      # explicit variable rather than a literal repeated per invocation.
+      - name: Generate flight docs
+        working-directory: flight
+        env:
+          FLIGHT_BUILD_DOCS: '1'
+        run: |
+          mkdir -p ../site-out/flight
+          for target in FlightCore FlightConfig FlightConfigCore FlightWeb \
+                        FlightChannels FlightChannelsProtocol \
+                        FlightChannelsClient FlightChannelsTesting \
+                        FlightPubSub FlightPubSubTesting FlightPresence \
+                        FlightPresenceProtocol FlightPresenceClient \
+                        FlightActuator FlightSecurityCore FlightWebTesting \
+                        FlightTransport FlightScheduler; do
+            echo "::group::flight/$target"
+            swift package --enable-all-traits \
+              --allow-writing-to-directory "../site-out/flight/$target" \
+              generate-documentation --target "$target" \
+              --transform-for-static-hosting \
+              --hosting-base-path "flight-school/reference/flight/$target" \
+              --output-path "../site-out/flight/$target"
+            echo "::endgroup::"
+          done
+
+      - name: Generate hangar docs
+        working-directory: hangar
+        env:
+          HANGAR_BUILD_DOCS: '1'
+        run: |
+          mkdir -p ../site-out/hangar
+          for target in Hangar HangarIntrospection; do
+            echo "::group::hangar/$target"
+            swift package \
+              --allow-writing-to-directory "../site-out/hangar/$target" \
+              generate-documentation --target "$target" \
+              --transform-for-static-hosting \
+              --hosting-base-path "flight-school/reference/hangar/$target" \
+              --output-path "../site-out/hangar/$target"
+            echo "::endgroup::"
+          done
+
+      - name: Generate flight-data docs
+        working-directory: flight-data
+        env:
+          FLIGHT_BUILD_DOCS: '1'
+        run: |
+          mkdir -p ../site-out/flight-data
+          for target in FlightCache FlightCacheTesting FlightDataCore \
+                        FlightDataTesting FlightMigrateCore \
+                        FlightDataPostgres FlightMigrate \
+                        FlightSchedulerPostgres FlightCacheValkey \
+                        FlightDataValkey FlightPubSubValkey; do
+            echo "::group::flight-data/$target"
+            swift package --enable-all-traits \
+              --allow-writing-to-directory "../site-out/flight-data/$target" \
+              generate-documentation --target "$target" \
+              --transform-for-static-hosting \
+              --hosting-base-path "flight-school/reference/flight-data/$target" \
+              --output-path "../site-out/flight-data/$target"
+            echo "::endgroup::"
+          done
+
+      # DocC's per-target archives don't self-assemble into a site — this
+      # is the small combined landing page PLAN §8a calls for. Generated
+      # here rather than hand-authored so adding a target to the loops
+      # above is the only edit a future change needs.
+      - name: Generate index
+        run: python3 scripts/generate-docs-index.py site-out/ site-out/index.html
+
+      - name: Smoke-check hosting base path
+        run: |
+          # The most common DocC-on-Pages mistake: a base path that doesn't
+          # match where the artifact is actually served makes every
+          # relative asset link 404 silently. Cheap check, not a full
+          # render: confirm the expected path segment appears in at least
+          # one generated page rather than discovering this live.
+          grep -rl "flight-school/reference/flight/FlightCore" site-out/flight/FlightCore/ | head -1
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
