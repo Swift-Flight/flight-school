@@ -10,7 +10,22 @@ import { createHighlighter } from 'shiki';
 // this SvelteKit project, so it can be shared with content-CI and (later)
 // the runner image build without either depending on the site's build
 // pipeline. See PLAN §6.
-const CONTENT_ROOT = path.resolve(fileURLToPath(import.meta.url), '../../../../../content');
+//
+// This MUST be an env var with a dev-time fallback, not a relative climb
+// from this file's own location: adapter-node bundles this module into
+// build/server/chunks/ at a different, and not guaranteed stable, path
+// depth than its source location — a relative `../../../../../content`
+// resolves correctly under `vite dev` (where files run from their real
+// source paths) and silently resolves to the wrong directory in the
+// production build, where every page falls back to its "coming soon"
+// state with no error. Caught by actually checking response *bodies*
+// against the production build, not just status codes — a page that
+// doesn't exist and a page whose content failed to load both return 200.
+// The Dockerfile sets CONTENT_ROOT=/content to match where it copies
+// content/ in the runtime image.
+const CONTENT_ROOT =
+	process.env.CONTENT_ROOT ??
+	path.resolve(fileURLToPath(import.meta.url), '../../../../../content');
 
 let highlighterPromise: ReturnType<typeof createHighlighter> | null = null;
 async function highlighter() {

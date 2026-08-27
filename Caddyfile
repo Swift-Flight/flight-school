@@ -1,0 +1,28 @@
+# Set FLIGHT_SCHOOL_DOMAIN to a bare domain (e.g. flight-school.dev) once
+# there's a real one to deploy to — Caddy's automatic HTTPS (a real Let's
+# Encrypt cert, zero other config) takes over for any address that isn't
+# explicitly http://. The default below includes the scheme specifically
+# to opt OUT of that for local `docker compose up`: without it, Caddy
+# treats bare "localhost" as a real hostname, provisions a local
+# self-signed cert, and 308-redirects all of :80 to :443 — which just
+# breaks a plain `curl http://localhost` with no explanation. Verified
+# against a real `docker compose up` run, not assumed.
+{$FLIGHT_SCHOOL_DOMAIN:http://localhost} {
+	reverse_proxy site:3000
+
+	encode gzip
+
+	# /preview/N/* → the fixed runner pool, WebSockets included — PLAN §4.
+	# Static routes because the pool size is fixed at deploy time; there is
+	# no dynamic service discovery to wire up. Uncomment and repeat one
+	# block per runner once M1's runner pool exists.
+	#
+	# handle_path /preview/1/* {
+	# 	reverse_proxy runner-1:8080
+	# }
+
+	log {
+		output stdout
+		format console
+	}
+}

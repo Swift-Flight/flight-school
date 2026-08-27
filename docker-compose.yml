@@ -1,0 +1,57 @@
+# One VM, `docker compose up -d` — PLAN §9. Only `site` exists yet
+# (milestone M0: guides + tutorial text, no code execution). `server`
+# (Flight backend) and `runner` (sandboxed execution pool) are commented
+# in below as the shape M1+ adds, not implemented — see STATUS.md.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - site
+
+  site:
+    build:
+      context: ./site
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - CONTENT_ROOT=/content
+      - PORT=3000
+    volumes:
+      # Bind-mounted, not baked into the image: content.ts reads these
+      # files per request, not at startup, so editing a guide or exercise
+      # here takes effect on the next request — no rebuild, no restart.
+      # See site/Dockerfile's comment on the same point.
+      - ./content:/content:ro
+    expose:
+      - '3000'
+
+  # server:
+  #   build: ./server
+  #   Flight backend — content API, session broker, channels. Lands with
+  #   the snippet-tier runner (M1). Not built yet.
+
+  # runner:
+  #   build: ./runner
+  #   deploy:
+  #     replicas: 4
+  #   Sandboxed execution pool — PLAN §4/§5 (non-root, read-only rootfs,
+  #   no network egress except postgres, seccomp, ulimits). Lands with M1.
+  #   Fixed pool size is why the (future) preview proxy config in Caddyfile
+  #   can be static rather than dynamically generated.
+
+  # postgres:
+  #   image: postgres:16-alpine
+  #   Session template databases (M2) and, later, the server's own session
+  #   store. Not needed until there's code execution to back.
+
+volumes:
+  caddy-data:
+  caddy-config:
