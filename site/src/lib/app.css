@@ -1,0 +1,124 @@
+:root {
+	--bg: #fbfbfd;
+	--panel: #ffffff;
+	--ink: #16161d;
+	--muted: #6b6b78;
+	--line: #e5e5ec;
+	--accent: #2f6df6;
+	--accent-ink: #ffffff;
+	--code-bg: #f6f6f9;
+	--mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--sans:
+		-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #121218;
+		--panel: #1a1a22;
+		--ink: #ececf2;
+		--muted: #9a9aa8;
+		--line: #2b2b36;
+		--accent: #7ea2ff;
+		--accent-ink: #0d1220;
+		--code-bg: #17171f;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--sans);
+	font-size: 16px;
+	line-height: 1.6;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+
+code {
+	font-family: var(--mono);
+	font-size: 0.9em;
+	background: var(--code-bg);
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+}
+
+pre.shiki {
+	padding: 14px 16px;
+	border-radius: 8px;
+	overflow-x: auto;
+	font-size: 0.88em;
+	line-height: 1.55;
+	border: 1px solid var(--line);
+}
+pre.shiki code {
+	background: none;
+	padding: 0;
+	border-radius: 0;
+}
+
+/* shiki's dual-theme output: it emits both light/dark colors as CSS
+   variables per span and switches on this media query itself, so no
+   extra JS is needed to keep code blocks in sync with the page theme. */
+@media (prefers-color-scheme: dark) {
+	pre.shiki,
+	pre.shiki span {
+		color: var(--shiki-dark) !important;
+		background-color: var(--shiki-dark-bg) !important;
+	}
+}
+
+.prose h1 {
+	font-size: 1.9rem;
+	margin: 0 0 0.6em;
+	letter-spacing: -0.01em;
+}
+.prose h2 {
+	font-size: 1.35rem;
+	margin: 1.8em 0 0.6em;
+	letter-spacing: -0.01em;
+}
+.prose h3 {
+	font-size: 1.1rem;
+	margin: 1.5em 0 0.5em;
+}
+.prose p {
+	margin: 0.9em 0;
+}
+.prose table {
+	border-collapse: collapse;
+	width: 100%;
+	margin: 1.2em 0;
+}
+.prose th,
+.prose td {
+	text-align: left;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--line);
+}
+.prose th {
+	font-size: 0.8em;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--muted);
+}
+.prose ul,
+.prose ol {
+	padding-left: 1.4em;
+}
