@@ -8,6 +8,23 @@
 # breaks a plain `curl http://localhost` with no explanation. Verified
 # against a real `docker compose up` run, not assumed.
 {$FLIGHT_SCHOOL_DOMAIN:http://localhost} {
+	# /api/* and /socket → the sessions/execution backend (PLAN §4). Must
+	# come before the catch-all `reverse_proxy site:3000` below — Caddy
+	# matches in file order, and the catch-all has no path condition, so a
+	# `handle`/`handle_path` after it would never be reached (verified
+	# against the adapted JSON, not assumed — `caddy adapt` confirms these
+	# two routes land ahead of the catch-all in the emitted route list).
+	# Plain `handle`, not `handle_path`: the server's own routes are
+	# literally `/api/session`, `/api/session/write`, etc. —
+	# `handle_path` would strip the `/api` prefix before proxying and the
+	# server would 404 every request.
+	handle /api/* {
+		reverse_proxy server:9100
+	}
+	handle /socket {
+		reverse_proxy server:9100
+	}
+
 	reverse_proxy site:3000
 
 	encode gzip
@@ -15,7 +32,11 @@
 	# /preview/N/* → the fixed runner pool, WebSockets included — PLAN §4.
 	# Static routes because the pool size is fixed at deploy time; there is
 	# no dynamic service discovery to wire up. Uncomment and repeat one
-	# block per runner once M1's runner pool exists.
+	# block per runner once the preview proxy (M3) exists — the runner
+	# pool itself has no exposed HTTP surface of its own (see
+	# docker-compose.yml's `runner-*` services), so this stays commented
+	# until something serves a learner's actual app preview, not just the
+	# supervisor's internal lease/write/run API.
 	#
 	# handle_path /preview/1/* {
 	# 	reverse_proxy runner-1:8080

@@ -1,0 +1,22 @@
+app:
+  name: server
+
+server:
+  host: 0.0.0.0
+  port: 9100
+
+# The fixed runner pool (PLAN §4) — named services, not `deploy.replicas`;
+# see docker-compose.yml's comment on why a replicated service can't be
+# addressed by one stable hostname per container, which session-sticky
+# leasing needs.
+runners:
+  pool:
+    - http://runner-1:9000
+    - http://runner-2:9000
+    - http://runner-3:9000
+    - http://runner-4:9000
+
+session:
+  idleTimeoutSeconds: 600
+  hardCapSeconds: 3600
+  reapIntervalSeconds: 30

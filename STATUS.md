@@ -215,16 +215,17 @@ the manifest before assuming it's written.
   document. `swift-changeset` was added as a fourth repo immediately
   after (see above) and hasn't had its own deployed run yet.
 
-## M1, started — the runner (`server/` still doesn't exist)
+## M1, well underway — the runner and the server
 
 Per `PLAN.md` §10, M1 is "Snippet tier + Hangar/Changeset curriculum" —
-the runner pool and channel-streamed output first, since the server has
-nothing to lease from until a runner exists. That's what this section
-covers: the runner is real, built, and verified end to end, including
-under the actual hardening flags PLAN §5 calls for — not just written
-and trusted. `server/` (the Flight backend that would lease from this
-pool and expose it to the browser) is still entirely unbuilt; nothing
-here is reachable by a learner yet.
+the runner pool and channel-streamed output. Both halves of PLAN §4's
+architecture now exist and have been verified talking to each other for
+real: `runner/` (the sandboxed workspace + supervisor) below, and
+`server/` (the sessions/execution Flight app that leases from the pool
+and streams output to the browser over Channels) in the section after
+it. `site/` still isn't wired to any of this yet — nothing here is
+reachable by a learner through the actual deployed site, only through
+direct HTTP/WebSocket calls to `server`, which is what verification used.
 
 **What exists**: `runner/workspace` (a plain SwiftPM package — one
 dependency, Hangar `0.2.1` — whose `exercise` executable target is the
@@ -326,23 +327,116 @@ substitute for checking:
    session ever waits on, but worth knowing before assuming "read-only
    + tmpfs + tight limits" is free.
 
-**Not yet done**: `server/` doesn't exist, so nothing here is reachable
-by a learner — this is purely the foundation the plan's own dependency
-order calls for building first. The `runner` service definition now in
-`docker-compose.yml` (an `internal: true` network, so the runner has no
-route to the outside world but stays reachable by a future `server` on
-the same network — `--network none` on the runner itself was tried
-first and rejected because it also blocks the server) has been
-validated with `docker compose config`, confirming the flags resolve as
-intended, but **not yet brought up via `docker compose up` itself** —
-everything above was verified through direct `docker build`/`docker
-run`, matching the compose config's resolved flags but not exercised
-through compose's own network/build machinery. A custom seccomp profile
-(PLAN §5 calls for "seccomp default profile," which Docker already
-applies without any extra configuration — a *tighter*, purpose-built
-profile is a real hardening step still open) and `swift build -j`
-capping (see #9) are the two concrete follow-ups worth doing before
-trusting this at real learner-facing scale.
+**Not yet done here**: `docker-compose.yml`'s `runner` entry originally
+used `deploy: replicas: 4` on one service — wrong, caught while building
+the server on top of it (see below), now four named `runner-1`..`runner-4`
+services instead. That, and everything else in this section, has been
+validated with `docker compose config` and directly with `docker
+build`/`docker run` against one runner at a time, but **not yet brought
+up as the full multi-runner `docker compose up` stack** — see the
+server section's own "not yet done" for the composite gap this leaves.
+A custom seccomp profile (PLAN §5 calls for "seccomp default profile,"
+which Docker already applies without any extra configuration — a
+*tighter*, purpose-built profile is a real hardening step still open)
+and `swift build -j` capping (see #9) are the two concrete follow-ups
+worth doing before trusting this at real learner-facing scale.
+
+## M1 continued — the server
+
+The sessions/execution half of PLAN §4: `server/` is a Flight app —
+`SessionBroker` (an actor holding pure in-memory pool/lease state: which
+runners are free, which session holds which lease, when it was last
+touched), `RunnerClient` (an `AsyncHTTPClient`-based caller of one
+runner's `/lease`/`/write`/`/run`/`/reset`/`/release`, including a
+from-scratch SSE parser for `/run`'s streamed output — nothing in Flight
+consumes an SSE stream, only produces one, so this had to be written
+against `ServerSentEvent.encoded`'s wire format directly), `SessionService`
+(composes the two and fans `/run`'s output out to a `session:<id>`
+Channel topic via `ChannelBroadcaster`, resolved with
+`context.resolve(ChannelBroadcaster.self)` exactly the way
+`benchmark/flight-app`'s `IssueController` already does it), a
+`SessionController` (`@Controller`, `/api/session`, `/api/session/write`,
+`/api/session/run`, `/api/session/reset`), a `SessionChannel` (join gate
+for `session:*` — rejects a socket unless the topic's session id is
+currently live), and `SessionReaperService` (the idle-TTL/hard-cap
+reaper PLAN §4 calls for, structured the same way
+`FlightPresenceModule`/`PresenceService` are: a `final class` module that
+stashes the post-freeze container so its `Service` can resolve from it —
+the shape any service-owning module needs, confirmed by reading that
+real precedent rather than guessing at the `FlightModule.service` seam).
+
+**Verified end to end against a real runner container**, not just
+compiled: created a session, wrote a real `@Entity`-bearing Hangar
+snippet, joined `session:<id>` over the WebSocket channel socket, called
+`/api/session/run`, and watched the actual build output and
+`debugSQL` line arrive as channel pushes —
+`SELECT "id", "total" FROM "orders" WHERE ("total" > $1)` for a
+hand-written `Order.where { $0.total > 100 }` snippet, streamed live,
+not polled. Also verified: reusing an existing session id is idempotent;
+`/write`/`/run`/`/reset` without a session id is rejected (400); joining
+a channel topic for an unknown session id is rejected
+(`flight:error`/`forbidden`); a failed runner lease correctly returns
+the claimed runner to the free pool rather than losing it
+(`SessionBroker.unclaim`); and, with the idle timeout and reap interval
+turned down to a few seconds for the test, the reaper actually expires
+an idle session, releases its runner lease back to the supervisor,
+pushes a `session_expired` event to a still-connected socket, and frees
+the runner for a brand new session to claim immediately after.
+
+**Two real findings from building this, not from writing it carefully:**
+
+1. **PLAN §4's "anonymous id (cookie)" isn't reachable yet.**
+   `Cookie`/`Set-Cookie` support landed on flight's `main`
+   (`8997a5a`, "Add cookie support") *after* the `v0.8.0` tag this
+   package resolves against — checked directly (`git log
+   v0.8.0..HEAD` in the flight checkout, plus confirming that checkout
+   had *other* uncommitted changes sitting in its working tree, which is
+   exactly the "don't read a dependency's mid-edit working tree" trap
+   the tutorial-content work below already learned once). Session
+   identity travels in an `X-Session-Id` header instead — the same
+   security shape PLAN's cookie design has anyway (v1 has no accounts;
+   knowing the session id already is the credential), just held by the
+   client's own JS rather than the browser's cookie jar. Revisit once
+   flight cuts a release past `v0.8.0`.
+2. **A replicated Compose service can't be leased into.** The `runner`
+   entry in `docker-compose.yml` used `deploy: replicas: 4` on one
+   service — which round-robins one shared hostname across containers
+   via Docker's embedded DNS, so there's no stable name to pin a
+   session's lease to one specific container for the session's whole
+   lifetime. The Caddyfile already assumed named `runner-1`/`runner-2`/…
+   services for exactly this reason (its own `/preview/N/*` comment, from
+   before the runner even existed) — the compose file just hadn't been
+   brought in line with it yet. Fixed with four named services sharing
+   one hardening block via a YAML anchor, confirmed by inspecting
+   `docker compose config`'s resolved output, not just eyeballing the
+   YAML merge syntax.
+
+**Also caught while wiring Caddy's `/api/*` and `/socket` routes**: a
+`handle_path /api/*` block strips the matched prefix before proxying,
+which would have forwarded `/api/session/write` to the server as
+`/session/write` — a 404, since the server's routes are literally
+`/api/session*`. Caught by running `caddy adapt` against the real
+Caddyfile and reading the emitted route JSON (`strip_path_prefix` was
+right there), not by assuming `handle_path` behaves like `handle`.
+Fixed by using plain `handle` for both new blocks; the same `caddy
+adapt` output also confirmed both new routes land ahead of the
+catch-all `reverse_proxy site:3000` in Caddy's evaluated route order,
+which was the other thing worth not just assuming from file order alone.
+
+**Not yet done**: the full stack — `caddy` + `site` + `server` + all
+four named runners — has never been brought up together via one `docker
+compose up`; verification here used a single `docker run` runner
+container and `swift run Server` on the host, pointed at it directly.
+Also open: a `server` restart drops `SessionBroker`'s in-memory lease
+map, but a runner's own lease state survives independently (its
+supervisor still thinks it's leased) — so a server crash or redeploy
+while sessions are live orphans those runners until something resets or
+restarts them, since nothing reconciles "who does the runner think holds
+it" against a fresh broker's empty state. Acceptable for v1's "sessions
+are disposable" posture, but a real gap, not a hidden one. Neither
+`runner/` nor `server/` has a CI build/test step yet (`.github/workflows/`
+still only has `docs.yml` and `site.yml`) — everything above was verified
+by hand, the same way the runner's own hardening was.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
@@ -359,13 +453,17 @@ current flat files are the final shape.
 
 ## Not started
 
-- `server/` (Flight backend — content API, session broker, channel-
-  streamed build output). Referenced as comments in `docker-compose.yml`
-  showing the intended shape, nothing implemented.
-- `runner/` (the sandboxed execution pool). Same — commented shape only.
-- Everything requiring either of the above: the snippet/db/app/app+db
-  execution tiers, the embedded editor, "Solve" diffing, session
-  presence, the preview proxy.
+- `server/`'s *content* module (PLAN §4: serving compiled exercise/guide
+  JSON from a build-time manifest) — `site` still reads `content/`
+  directly and per-request (`site/src/lib/server/content.ts`); nothing
+  has forced that to change yet, and PLAN's own content-layout deviation
+  (below) means the `app-a`/`app-b` shape a real content API would serve
+  doesn't exist yet either.
+- Everything in `site/` that would actually let a learner reach the
+  runner/server work above: the embedded editor, wiring the tutorial UI
+  to `/api/session*` and the `/socket` channel, "Solve" diffing, session
+  presence, the preview proxy, and the `db`/`app`/`app+db` execution
+  tiers (PLAN §3) beyond the no-DB snippet tier verified above.
 
 ## If you're picking this up cold
 

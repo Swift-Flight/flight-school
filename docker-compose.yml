@@ -1,7 +1,6 @@
-# One VM, `docker compose up -d` — PLAN §9. Only `site` exists yet
-# (milestone M0: guides + tutorial text, no code execution). `server`
-# (Flight backend) and `runner` (sandboxed execution pool) are commented
-# in below as the shape M1+ adds, not implemented — see STATUS.md.
+# One VM, `docker compose up -d` — PLAN §9. M1 (PLAN §10): `site`, `server`
+# (sessions/execution) and the runner pool now all exist — see STATUS.md for
+# what's actually been verified end to end and what's still open.
 services:
   caddy:
     image: caddy:2-alpine
@@ -15,6 +14,7 @@ services:
       - caddy-config:/config
     depends_on:
       - site
+      - server
 
   site:
     build:
@@ -33,22 +33,45 @@ services:
     expose:
       - '3000'
 
-  # server:
-  #   build: ./server
-  #   Flight backend — content API, session broker, channels. Not built
-  #   yet — the runner below has nothing to lease from until this exists;
-  #   see STATUS.md for what's actually been verified so far and what
-  #   this specific gap blocks.
+  # The sessions/execution half of the Flight backend (PLAN §4) — leases a
+  # runner per session and streams its build/run output over Channels. The
+  # *content* half (serving compiled exercise/guide JSON) isn't built —
+  # `site` still reads `content/` directly (see site/src/lib/server/content.ts)
+  # and there's no proven need to move that yet; see STATUS.md.
+  server:
+    build: ./server
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - '9100'
+    networks:
+      - default
+      - runner-internal
+    # Joins both networks: `default` to be reachable from Caddy, and
+    # `runner-internal` to reach the runner pool by name — the only thing
+    # allowed onto that network besides the runners themselves.
 
   # Sandboxed execution pool (PLAN §4/§5). Every flag below was verified
   # against a real running container, not assumed from the plan's own
   # prose — several (the tmpfs uid/gid, the `exec` mount option, the
   # memory ceiling) turned out wrong on the first attempt. See STATUS.md
   # for the specific failures each one fixed.
-  runner:
+  #
+  # Four *named* services, not one service with `deploy.replicas: 4` (an
+  # earlier version of this file did exactly that, and it was wrong: a
+  # replicated Compose service round-robins one shared hostname across
+  # its containers via Docker's embedded DNS, so there is no stable name
+  # to address one specific replica by. A session's lease lives in one
+  # container's workspace — the server has to keep talking to the exact
+  # same one for the session's whole lifetime, and the Caddyfile's own
+  # `/preview/N/*` design (PLAN §4) already assumed named
+  # `runner-1`/`runner-2`/... services for the same reason. Named
+  # services fix both at once. `&runner-base`/`<<:` (YAML merge) keeps
+  # the identical hardening config from being repeated four times.
+  runner-1: &runner-base
     build: ./runner
-    deploy:
-      replicas: 4
     read_only: true
     tmpfs:
       # uid/gid must match the image's `runner` user exactly (10001, not
@@ -67,8 +90,18 @@ services:
     networks:
       - runner-internal
     # No `ports:`/`expose:` — nothing outside `runner-internal` can reach
-    # this at all, including the host. The server (once it exists) joins
-    # this same network to lease sessions from it.
+    # this at all, including the host. The server joins this same
+    # network to lease sessions from the pool by service name
+    # (`runner-1:9000`, matching the supervisor's `EXPOSE 9000`).
+
+  runner-2:
+    <<: *runner-base
+
+  runner-3:
+    <<: *runner-base
+
+  runner-4:
+    <<: *runner-base
 
   # postgres:
   #   image: postgres:16-alpine
