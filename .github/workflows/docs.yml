@@ -42,6 +42,17 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.3.3
     steps:
+      # Every checkout below names an external repo (`repository:` +
+      # `path:`), which is the *only* kind of checkout this workflow ever
+      # had — there was never a plain `actions/checkout@v4` for this repo
+      # itself, so `scripts/generate-docs-index.py` never existed in the
+      # workspace at all. Caught only by actually running this workflow:
+      # every step that only touches the three cloned repos (the DocC
+      # generation loops) worked fine regardless, right up until the one
+      # step that needed this repo's own `scripts/`.
+      - name: Checkout flight-school
+        uses: actions/checkout@v4
+
       - name: Checkout flight
         uses: actions/checkout@v4
         with:

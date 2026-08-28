@@ -138,14 +138,26 @@ the manifest before assuming it's written.
   on every push/PR.
 - `docs.yml` — DocC → GitHub Pages for flight/hangar/flight-data. **Run
   for real** (GitHub Pages enabled via the API, `gh workflow run`
-  triggered) — and it caught a real bug on the first attempt that no
-  local test could have: the `swift:6.3.3` container image has no Python
-  at all, so `generate-docs-index.py` failed with `python3: not found`
-  after all three repos' DocC generation had already succeeded. Every
-  local dev machine has python3, so this was invisible until the
-  workflow actually ran in its real environment. Fixed with an
-  `apt-get install -y python3` step; re-triggered to confirm the fix —
-  see the next status update for the outcome once that run completes.
+  triggered) — and caught two real bugs, one per attempt, that no local
+  test could have: (1) the `swift:6.3.3` container image has no Python
+  at all, so `generate-docs-index.py` failed with `python3: not found`;
+  fixed with an `apt-get install -y python3` step. (2) The workflow only
+  ever checked out the three *external* repos it clones for DocC
+  generation (`repository:`/`path:` on every `actions/checkout@v4` call)
+  — there was never a plain checkout of `flight-school` itself, so
+  `scripts/generate-docs-index.py` never existed in the workspace at
+  all. Every DocC-generation step worked fine regardless (they only
+  touch the three cloned repos), which is exactly why this stayed
+  invisible until the one step that needed this repo's own `scripts/`
+  actually ran. Fixed by adding an initial bare `actions/checkout@v4`
+  before the three named ones. Also fixed in the same pass: the
+  generated index page linked to `flight-school.dev`, a domain that
+  isn't configured (confirmed via the Pages API — no CNAME; the real
+  URL is `swift-flight.github.io/flight-school/`, and the actual
+  SvelteKit site has no fixed production domain yet either) — now links
+  to the GitHub repository instead of a guessed-at domain. Re-triggered
+  a third time to confirm both fixes; see the next status update for
+  the outcome.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
