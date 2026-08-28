@@ -4,21 +4,42 @@ What's actually built, verified, and running, versus what's still just in
 `PLAN.md`. Updated as milestones land — see `PLAN.md` §10 for the full
 milestone list this maps onto.
 
-## Done — M0 fully closed
+## Done — M0's tutorial/guides half solid; DocC had a real bug this file
+## wrongly reported as fixed
 
 Per `PLAN.md` §10, M0 is "SvelteKit site rendering guides + tutorial
 *text* (no execution); the guides link out to DocC on GitHub Pages."
-Every piece of that is now real and confirmed working: the full tutorial
-(40 of 41 exercises), all 13 guides, and — as of the third attempt,
-after two real bugs found and fixed by actually running it — a live
-DocC reference site at `https://swift-flight.github.io/flight-school/`.
-Verified past "the workflow went green": curled the live index (200,
-correct title) and a real target's page
-(`.../flight/FlightCore/documentation/flightcore/`, 200), and counted
-31 target links on the index — 18 flight + 2 hangar + 11 flight-data,
-exactly matching every target named in `docs.yml`'s three generation
-loops, so nothing silently failed to generate or got dropped from the
-index.
+The tutorial (40 of 41 exercises) and all 13 guides are real and
+confirmed working — see below, unchanged from before.
+
+The DocC-on-Pages half was prematurely declared done here, twice, on
+the strength of a verification pass that only checked HTTP status
+codes. **Every DocC page was actually rendering blank** — reported
+directly by a user, not caught by anything in this file's own process.
+Root cause: DocC's `--transform-for-static-hosting` output is a
+client-rendered SPA shell (`<div id="app"></div>`, empty until JS
+populates it); the `--hosting-base-path` passed to DocC
+(`flight-school/reference/flight/$target`) didn't match where the
+artifact actually gets served (`flight-school/flight/$target` — no
+`/reference/` segment, confirmed by checking the real generated file
+layout and the index page's own links, both of which agreed with each
+other and disagreed with the flag). Every JS/CSS asset the page needed
+therefore 404'd, silently, and the page never became more than an empty
+shell — a failure mode a status-code check cannot see, because the HTML
+document itself still returns 200.
+
+Worse: this workflow already *had* a step named "Smoke-check hosting
+base path" meant to catch exactly this, and it didn't, because it only
+grepped for the base-path string appearing *somewhere* in the output —
+which is always true, since DocC bakes in whatever it's told whether or
+not that's where the files end up. Replaced with a check that extracts
+the real baked-in `baseUrl` from a generated page and confirms a
+directory actually exists where it points; tested directly against
+both the broken value (correctly fails) and the fixed one (correctly
+passes) before trusting it in CI. Fixed and re-triggered; **not yet
+re-verified against live rendered content** — the next update to this
+file needs to confirm actual page content this time, not a status
+code, before this can honestly be called done again.
 
 **Site.** SvelteKit 5 (Svelte `5.56.1`, verified — not just requested),
 `adapter-node`, deployed via `docker compose up -d` (Caddy + site).
@@ -145,26 +166,42 @@ the manifest before assuming it's written.
   on every push/PR.
 - `docs.yml` — DocC → GitHub Pages for flight/hangar/flight-data. **Run
   for real** (GitHub Pages enabled via the API, `gh workflow run`
-  triggered) — and caught two real bugs, one per attempt, that no local
-  test could have: (1) the `swift:6.3.3` container image has no Python
-  at all, so `generate-docs-index.py` failed with `python3: not found`;
-  fixed with an `apt-get install -y python3` step. (2) The workflow only
-  ever checked out the three *external* repos it clones for DocC
-  generation (`repository:`/`path:` on every `actions/checkout@v4` call)
-  — there was never a plain checkout of `flight-school` itself, so
-  `scripts/generate-docs-index.py` never existed in the workspace at
-  all. Every DocC-generation step worked fine regardless (they only
-  touch the three cloned repos), which is exactly why this stayed
-  invisible until the one step that needed this repo's own `scripts/`
-  actually ran. Fixed by adding an initial bare `actions/checkout@v4`
-  before the three named ones. Also fixed in the same pass: the
-  generated index page linked to `flight-school.dev`, a domain that
-  isn't configured (confirmed via the Pages API — no CNAME; the real
-  URL is `swift-flight.github.io/flight-school/`, and the actual
-  SvelteKit site has no fixed production domain yet either) — now links
-  to the GitHub repository instead of a guessed-at domain. **The third
-  attempt succeeded** — `build` and `deploy` both green, live site
-  confirmed serving real content (see above).
+  triggered) — and caught three real bugs across four attempts, none of
+  which a local test could have: (1) the `swift:6.3.3` container image
+  has no Python at all, so `generate-docs-index.py` failed with
+  `python3: not found`; fixed with an `apt-get install -y python3`
+  step. (2) The workflow only ever checked out the three *external*
+  repos it clones for DocC generation (`repository:`/`path:` on every
+  `actions/checkout@v4` call) — there was never a plain checkout of
+  `flight-school` itself, so `scripts/generate-docs-index.py` never
+  existed in the workspace at all. Every DocC-generation step worked
+  fine regardless (they only touch the three cloned repos), which is
+  exactly why this stayed invisible until the one step that needed this
+  repo's own `scripts/` actually ran. Fixed by adding an initial bare
+  `actions/checkout@v4` before the three named ones. Also fixed in the
+  same pass: the generated index page linked to `flight-school.dev`, a
+  domain that isn't configured (confirmed via the Pages API — no CNAME;
+  the real URL is `swift-flight.github.io/flight-school/`, and the
+  actual SvelteKit site has no fixed production domain yet either) —
+  now links to the GitHub repository instead of a guessed-at domain.
+  (3) **The serious one, found by a user, not by this process**: the
+  third attempt was declared successful after only checking HTTP status
+  codes on the index and one target page. Every DocC page was actually
+  rendering blank — the `--hosting-base-path` baked into DocC's output
+  (`flight-school/reference/flight/$target`) didn't match where the
+  artifact is really served (`flight-school/flight/$target`, no
+  `/reference/`), so every JS/CSS asset the page's client-rendered shell
+  needs 404'd and `<div id="app">` never filled in. The workflow's own
+  "Smoke-check hosting base path" step existed specifically to catch
+  this and didn't, because it only grepped for the base-path string
+  appearing *somewhere* in the output — always true, since DocC bakes
+  in whatever it's told regardless of whether that's correct. Fixed the
+  three `--hosting-base-path` values and replaced the smoke-check with
+  one that extracts the real baked-in `baseUrl` and confirms a matching
+  directory actually exists in the artifact — tested directly against
+  both the broken and fixed values before trusting it in CI. Re-
+  triggered; not yet re-confirmed against live rendered content (a real
+  status-code check, not a repeat of the mistake that missed this).
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
@@ -239,3 +276,21 @@ string containing `:`, say — caught once already, in
 cleanly and only breaks when the page is actually requested. Spot-check
 new content against a real running server (`node build/index.js` with
 `CONTENT_ROOT` set), not just the build/typecheck/link-check trio.
+
+**A status code is not proof of content, full stop — this was learned
+twice in one session and is worth stating as a hard rule now rather than
+trusting it'll stick after one example.** The first time (above) was the
+production `CONTENT_ROOT` bug: a missing page and a broken content load
+both return 200. The second time was worse, because it involved a *live*
+deployment declared done on exactly this mistake: every DocC page on
+GitHub Pages was rendering completely blank — a client-side SPA shell
+whose JS 404'd because of a hosting-base-path mismatch — while the HTML
+document itself still answered 200 the whole time. A user found it; the
+verification pass that declared the DocC deploy "confirmed working" had
+checked only `curl -o /dev/null -w "%{http_code}"` against the index and
+one target page. The fix: when a page can render blank/wrong while still
+returning 200 — anything with client-side rendering, a JS-populated
+shell, or content loaded after the initial response — the check has to
+look at what the page actually contains (grep the body for expected
+text, or for a client-rendered page, check that its actual asset URLs
+resolve), never the status code alone.

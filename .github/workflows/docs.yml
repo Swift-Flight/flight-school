@@ -96,7 +96,7 @@ jobs:
               --allow-writing-to-directory "../site-out/flight/$target" \
               generate-documentation --target "$target" \
               --transform-for-static-hosting \
-              --hosting-base-path "flight-school/reference/flight/$target" \
+              --hosting-base-path "flight-school/flight/$target" \
               --output-path "../site-out/flight/$target"
             echo "::endgroup::"
           done
@@ -113,7 +113,7 @@ jobs:
               --allow-writing-to-directory "../site-out/hangar/$target" \
               generate-documentation --target "$target" \
               --transform-for-static-hosting \
-              --hosting-base-path "flight-school/reference/hangar/$target" \
+              --hosting-base-path "flight-school/hangar/$target" \
               --output-path "../site-out/hangar/$target"
             echo "::endgroup::"
           done
@@ -134,7 +134,7 @@ jobs:
               --allow-writing-to-directory "../site-out/flight-data/$target" \
               generate-documentation --target "$target" \
               --transform-for-static-hosting \
-              --hosting-base-path "flight-school/reference/flight-data/$target" \
+              --hosting-base-path "flight-school/flight-data/$target" \
               --output-path "../site-out/flight-data/$target"
             echo "::endgroup::"
           done
@@ -155,11 +155,27 @@ jobs:
       - name: Smoke-check hosting base path
         run: |
           # The most common DocC-on-Pages mistake: a base path that doesn't
-          # match where the artifact is actually served makes every
-          # relative asset link 404 silently. Cheap check, not a full
-          # render: confirm the expected path segment appears in at least
-          # one generated page rather than discovering this live.
-          grep -rl "flight-school/reference/flight/FlightCore" site-out/flight/FlightCore/ | head -1
+          # match where the artifact is actually served makes every JS/CSS
+          # asset 404, and the page renders as a permanently empty
+          # <div id="app"> — no error, no console noise a curl-based check
+          # would catch, just a blank page forever. The previous version of
+          # this check only confirmed the base-path string appeared
+          # *somewhere* in the output, which is worthless: DocC always
+          # bakes in whatever `--hosting-base-path` it was given, correct
+          # or not, so that check passed even while every page was blank
+          # in production. This instead extracts the baked-in baseUrl and
+          # confirms a directory actually exists where it points.
+          BASE_URL=$(grep -o 'var baseUrl = "[^"]*"' site-out/flight/FlightCore/documentation/flightcore/index.html | sed 's/var baseUrl = "//; s/"$//')
+          # Strip the GitHub Pages project-site prefix (this repo's own
+          # name) — real once deployed, but not part of the artifact
+          # itself, which becomes Pages' served root.
+          RELATIVE=${BASE_URL#/flight-school/}
+          RELATIVE=${RELATIVE%/}
+          if [ ! -d "site-out/$RELATIVE" ]; then
+            echo "::error::hosting-base-path baked into FlightCore's docs ($BASE_URL) has no matching directory at site-out/$RELATIVE — every asset on every generated page will 404."
+            exit 1
+          fi
+          echo "hosting-base-path OK: site-out/$RELATIVE exists, matching baked-in baseUrl $BASE_URL"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
