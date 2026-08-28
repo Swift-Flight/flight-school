@@ -1009,6 +1009,43 @@ error rather than a plumbing bug.
 right bodies and content types. That is the whole chain the iframe
 actually exercises — browser shape, server, runner, proxy — end to end.
 
+**Four more Part 1 exercises wired** (`01-bootstrap`, `03-parameters`,
+`04-request-bodies`, `05-responses`), joining `02-first-route` — the same
+batch-migrate step Part 2 took after `06-preloading`. Each solution was
+compiled *and curled* against the real template before being trusted, and
+the prose was corrected against that output rather than the other way
+round.
+
+The substantive content problem: Part 1 runs on the `skeleton` template,
+which has **no database**, but three of these exercises were written
+against `repo.one(Post...)`. Copying them across would have shipped code
+the tier physically cannot run. They were retargeted instead — an `Int`
+path parameter rather than a UUID lookup, a bounds check standing in for
+the row that isn't there — and where that substitution changes what's
+being taught, the prose says so and names Part 3 as where the real query
+arrives. This is worth expecting for the rest of Part 1 too: the
+curriculum was drafted before the tiers were real, and "which tier can
+actually run this" is a question each exercise now has to answer.
+
+**Two Part 1 exercises are deliberately not wired, both for real reasons
+rather than time**:
+
+- `08-middleware` needs the learner to edit *two* files — the `@Middleware`
+  type and `AppModule`'s `pipeline { }` block in `Main.swift` — because
+  the exercise's whole point is that registering the type and enrolling it
+  in a pipeline are separate, explicit steps. That needs the file-tree UI
+  deferred out of M3's pilot (`meta.json.focus` is already an array for
+  exactly this reason; nothing reads past the first entry yet).
+- `09-configuration` teaches `@Settings` and required `@ConfigValue` keys,
+  both of which need new keys in `flight.yaml` — and `flight.yaml` is
+  outside the write allowlist on purpose. It isn't an oversight to relax:
+  the file carries the host/port binding the preview proxy depends on, so
+  a learner setting `server.host: 127.0.0.1` would silently break their
+  own preview with no visible cause. The honest options are a narrower
+  allowlist that permits specific *keys* rather than the file, or an
+  exercise that only reads keys the template already ships. Neither is
+  obviously right, so neither was guessed at.
+
 **Left for follow-up, deliberately**: the rest of Part 1 and all of Part 3
 (`app+db`, which also needs the session database wired into the app
 template, unlike this tier). And two known limits, recorded in comments at
