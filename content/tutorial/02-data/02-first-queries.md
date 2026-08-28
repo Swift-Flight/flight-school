@@ -26,11 +26,11 @@ never disturbs the base itself:
 ```swift
 let base = Post.where { $0.published == true }
 
-let recent = base.order { $0.createdAt.desc() }.limit(10)
-let byAuthor = base.where { $0.authorID == id }
+let recent = base.order { $0.viewCount.desc() }.limit(10)
+let popular = base.where { $0.viewCount > 1_000 }
 ```
 
-`recent` and `byAuthor` both start from `base`; neither mutates it, so
+`recent` and `popular` both start from `base`; neither mutates it, so
 `base` is exactly as usable after both lines as before them. The `Repo` is
 what actually reaches the database, and it comes in exactly two shapes
 matched to what you're asking for:

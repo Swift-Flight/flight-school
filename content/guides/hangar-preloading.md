@@ -11,7 +11,8 @@ An association's property type is `Loadable<T>`, never `T` directly:
 @Entity("posts")
 struct Post {
     @ID var id: UUID
-    @BelongsTo(foreignKey: \.authorID) var author: Loadable<Author>
+    var authorID: UUID
+    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
     @HasMany(foreignKey: \Comment.postID) var comments: Loadable<[Comment]>
 }
 ```

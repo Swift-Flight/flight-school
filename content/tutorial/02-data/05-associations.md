@@ -9,7 +9,8 @@ order: 5
 struct Post {
     @ID var id: UUID
     var title: String
-    @BelongsTo(foreignKey: \.authorID) var author: Loadable<Author>
+    var authorID: UUID
+    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
     @HasMany(foreignKey: \Comment.postID) var comments: Loadable<[Comment]>
 }
 ```
@@ -48,7 +49,7 @@ if post.comments.isLoaded {
 ## A nullable foreign key is a nullable `Loadable`, not a special case
 
 ```swift
-@BelongsTo(foreignKey: \.editorID) var editor: Loadable<Author?>
+@BelongsTo(foreignKey: \Post.editorID) var editor: Loadable<Author?>
 ```
 
 `.notLoaded` still means "nobody asked yet." `.loaded(nil)` means something

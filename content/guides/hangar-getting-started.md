@@ -20,7 +20,9 @@ struct Post {
     @ID var id: UUID
     var title: String
     var viewCount: Int
-    @BelongsTo(foreignKey: \.authorID) var author: Loadable<Author>
+    var published: Bool
+    var authorID: UUID
+    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
 }
 ```
 
@@ -47,7 +49,7 @@ never mutates what it was built from:
 
 ```swift
 let base = Post.where { $0.published == true }
-let recent = base.order { $0.createdAt.desc() }.limit(10)
+let recent = base.order { $0.viewCount.desc() }.limit(10)
 let mine = base.where { $0.authorID == currentUserID }   // `base` is unchanged
 ```
 
@@ -86,8 +88,7 @@ involved:
 
 ```swift
 print(popular.debugSQL)
-// SELECT "id", "title", "view_count", "author_id" FROM "posts"
-// WHERE "view_count" > $1 ORDER BY "view_count" DESC LIMIT $2
+// SELECT "id", "title", "view_count", "published", "author_id" FROM "posts" WHERE ("view_count" > $1) ORDER BY "view_count" DESC LIMIT 20
 ```
 
 `debugSQL` never contains a bound value — `$1`, `$2` are placeholders, the

@@ -504,14 +504,69 @@ one-line callout explaining the wrap, rather than leave a first-run
 learner wondering if their output is wrong when it's actually the
 article that was formatted differently from reality.
 
-**`02-data/02-first-queries` deliberately left unwired**, not
-overlooked: its own example (`try await repo.all(query)`) needs a live
-`Repo` against Postgres to mean anything — that's the `db` tier (M2),
-not `snippet`. Wiring a snippet-tier editor to it now would mean either
-showing code that can't actually run the way it's written, or
-duplicating `03-predicates`'s `debugSQL`-only example under a different
-title. Left as prose-only until the `db` tier exists to demonstrate it
-for real, rather than force a mismatched interactive example onto it.
+**`02-data/02-first-queries` — redesigned, not left prose-only.** Its
+literal example (`try await repo.all(query)`) needs a live `Repo`
+against Postgres, which the snippet tier doesn't have. Rather than skip
+it (the original call here, and wrong — see the M1-closing pass below),
+the exercise now demonstrates the same point (composing from a shared
+`base` never mutates it, and nothing executes until something asks) by
+rendering two composed queries' `debugSQL` side by side instead of
+executing either — arguably a *stronger* demonstration of "building a
+query touches no database," since there's no database in this container
+at all and the proof is right there in the output. Wired and verified
+the same way as the others.
+
+## M1 closed: audited the whole no-DB Part 2 curriculum, not just wired it
+
+The user asked directly whether M1 was actually done before moving to
+M2. It wasn't — `02-first-queries` was skipped rather than solved, and
+a real gap existed in `04-changesets`. Checking that claim (not
+restating it) is what surfaced three more real bugs, on top of the
+`debugSQL`-wrapping one already found:
+
+- **The "`04-changesets` needs a new runner dependency" note above was
+  wrong.** Checked directly against Hangar `v0.2.1` (the exact tag the
+  runner's workspace already pins): `Hangar`'s own `Package.swift`
+  depends on `swift-changeset`'s `Changesets` product, `Hangar`'s
+  `Exports.swift` re-exports it (`@_exported import Changesets`), and
+  `@Entity`'s macro expansion already generates the `TableModel`
+  conformance (`Changesets.TableColumn` catalog) every `Changeset` needs.
+  `import Hangar` alone is the whole dependency — nothing to add,
+  nothing to rebuild. The earlier claim was never checked against
+  Hangar's actual source before being written down.
+- **`@BelongsTo(foreignKey: \.fieldName)` — the shorthand keypath form
+  shown in four places (`05-associations.md` ×2,
+  `hangar-getting-started.md`, `hangar-preloading.md`) — does not
+  compile.** Verified directly: `error: cannot infer key path type from
+  context; consider explicitly specifying a root type`. Hangar's own
+  test suite (`TestEntities.swift`) always writes the explicit form,
+  `\Post.authorID`; fixed all four to match, then re-verified the
+  corrected form actually compiles and runs (the thrown
+  `HangarError.notPreloaded` prints "Association \"author\" was not
+  preloaded. Add `.preload(\.author)` to the query that fetched this
+  model." — also confirmed, not assumed).
+- **Two guide code blocks referenced struct fields that were never
+  declared** (`hangar-getting-started.md`'s `Post` used `authorID` and
+  `published` without either being a stored property; a later example
+  in the same file used `createdAt`, matching nothing) — a learner
+  pasting the shown struct and then the shown query would hit "value of
+  type 'Post.Columns' has no member." Fixed by declaring the fields the
+  examples already assumed.
+- **`hangar-getting-started.md` claimed `LIMIT` is parameterized**
+  (`LIMIT $2`). Verified directly: it renders as a literal integer
+  (`LIMIT 20`), not a bind placeholder — consistent with `LIMIT`/`OFFSET`
+  needing no injection protection since they're never user-supplied
+  strings. Fixed, and reused the exact confirmed output string across
+  `hangar-getting-started.md` and `hangar-queries.md`, which share the
+  identical query.
+
+All five of Part 2's no-DB exercises are now wired and independently
+verified against a real runner: `01-entities`, `02-first-queries`,
+`03-predicates`, `04-changesets`, `05-associations`. Per PLAN §10, that
+— plus the runner pool and channel-streamed output, both already
+verified above — is what M1 actually asks for. `06-preloading` onward
+correctly stays out of scope: preloading's own teaching point is a
+measured N+1 ratio against real rows, which needs the `db` tier (M2).
 
 **Not independently verified — flagged, not silently assumed working**:
 no real browser was available to test this in (no Playwright, no
@@ -549,14 +604,17 @@ shape generalizes to it.
   JSON from a build-time manifest) — `site` still reads `content/`
   directly and per-request (`site/src/lib/server/content.ts`); nothing
   has forced that to change yet.
-- Starting snippets for the rest of Part 2's no-DB exercises
-  (`04-changesets` onward) — `04-changesets` specifically is blocked on
-  the runner's workspace not depending on `swift-changeset` yet
-  (`runner/workspace/Package.swift` only has Hangar), which needs its own
-  image rebuild and warm-up re-verification, not just a content change.
 - "Solve" diffing, session presence, the preview proxy, and the
   `db`/`app`/`app+db` execution tiers (PLAN §3) beyond the no-DB snippet
-  tier wired above.
+  tier wired above — this is genuinely M2+, not something M1 left
+  unfinished.
+- A similar accuracy pass over the *rest* of the plain-docs guides
+  (`up-and-running.md`, `routing-and-controllers.md`, etc.) and the
+  `db`/`app`-tier curriculum once those tiers exist — the M1-closing
+  audit above only covered the Hangar/Changeset guides, since that's
+  what M1's own scope touches. Worth doing again whenever a tier goes
+  from written to interactive, on the same theory that caught these
+  bugs: a code block nobody's run is a claim, not a fact.
 
 ## If you're picking this up cold
 

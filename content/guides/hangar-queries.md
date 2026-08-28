@@ -18,9 +18,7 @@ explicitly (never `SELECT *`), every value a `$n` placeholder, never a
 literal:
 
 ```
-SELECT "id", "title", "view_count", "published"
-FROM "posts"
-WHERE (("published" = $1) AND ("view_count" > $2))
+SELECT "id", "title", "view_count", "published", "author_id" FROM "posts" WHERE (("published" = $1) AND ("view_count" > $2)) ORDER BY "view_count" DESC LIMIT 20
 ```
 
 ## Joins, aliases, and self-joins
