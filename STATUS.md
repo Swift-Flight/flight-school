@@ -990,14 +990,36 @@ runners' port 8080 and nothing else. Deliberately *not* Caddy joining
 supervisor control API (port 9000), none of which Caddy has any business
 reaching. Both networks stay `internal: true`.
 
-**Not verified, and not claimed**: the tier-mismatch re-lease path (the
-one genuinely new piece of *server* logic — a snippet-tier session cookie
-arriving at an app-tier exercise), and the full browser-shaped run through
-site + server rather than against the supervisor directly. The remaining
-known limits — prefix-stripping, which will block `07-static-assets` until
-a per-runner hostname exists, and the iframe `sandbox` being nominal
-rather than load-bearing — are recorded in the plan file and in comments
-at the exact places they'd bite (`Caddyfile`, `AppEditor.svelte`).
+**The tier-mismatch re-lease path** — the one genuinely new piece of
+*server* logic — is verified too, in both directions, against a real
+server container: one cookie jar, `POST /api/session` (snippet) then
+`POST /api/session?tier=app` returns a **different** session id, and the
+first session is genuinely torn down rather than merely shadowed (a run
+against the old id answers 404). `previewPath` (`/preview/runner-1/`) is
+present on the app-tier response and absent from the snippet one. This
+matters because without it a learner arriving at a Part 1 exercise still
+holding a Part 2 session cookie would silently get a snippet workspace,
+and their code landing in the wrong project would look like a compiler
+error rather than a plumbing bug.
+
+**And the full browser-shaped path**, not just the supervisor API:
+`POST /api/session?tier=app` → `POST /api/session/write-files` (204) →
+`POST /api/session/run` (202) → the app answering on
+`/preview/runner-1/hello` and `/hello-json` through real Caddy with the
+right bodies and content types. That is the whole chain the iframe
+actually exercises — browser shape, server, runner, proxy — end to end.
+
+**Left for follow-up, deliberately**: the rest of Part 1 and all of Part 3
+(`app+db`, which also needs the session database wired into the app
+template, unlike this tier). And two known limits, recorded in comments at
+the exact places they'd bite (`Caddyfile`, `AppEditor.svelte`) rather than
+only here: prefix-stripping breaks any app that emits its own URLs, which
+**will block `07-static-assets`** until each runner gets its own hostname
+(also PLAN §5's own "separate preview domain" hardening step); and the
+iframe `sandbox` is nominal rather than load-bearing, since `allow-scripts`
+plus `allow-same-origin` on same-origin content effectively disables it —
+acceptable at v1's trust level, but not something to mistake for
+isolation.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
