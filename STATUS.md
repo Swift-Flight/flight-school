@@ -1014,7 +1014,12 @@ actually exercises — browser shape, server, runner, proxy — end to end.
 batch-migrate step Part 2 took after `06-preloading`. Each solution was
 compiled *and curled* against the real template before being trusted, and
 the prose was corrected against that output rather than the other way
-round.
+round. One of them (`04-request-bodies`) was then re-verified through the
+whole production-shaped path — lease, multi-file write, run, and requests
+arriving via Caddy's `/preview/runner-1/` — which also covers something
+the M3 pilot never did: a **`POST` through `handle_path`**, body intact,
+including the 400 and 415 negotiation failures. The pilot only ever proxied
+GETs.
 
 The substantive content problem: Part 1 runs on the `skeleton` template,
 which has **no database**, but three of these exercises were written
