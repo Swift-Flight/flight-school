@@ -128,6 +128,12 @@ jobs:
             echo "::endgroup::"
           done
 
+      # The swift:6.3.3 container image has no Python at all — caught only
+      # by actually running this workflow for real, since every local dev
+      # machine has python3 and never exposed the gap.
+      - name: Install Python
+        run: apt-get update && apt-get install -y --no-install-recommends python3
+
       # DocC's per-target archives don't self-assemble into a site — this
       # is the small combined landing page PLAN §8a calls for. Generated
       # here rather than hand-authored so adding a target to the loops

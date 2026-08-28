@@ -103,13 +103,16 @@ the manifest before assuming it's written.
 - `site.yml` — content link-checking (`scripts/check-content-links.py`,
   modeled on flight-cli's `verify-tutorial.sh`) + site type-check + build,
   on every push/PR.
-- `docs.yml` — DocC → GitHub Pages for flight/hangar/flight-data.
-  **Not yet run for real** (workflow_dispatch/weekly, and the three repos
-  it clones need to exist at the refs it's given) — the DocC generation
-  command and the index generator were each verified independently
-  against real output, but the full workflow end-to-end, including the
-  actual Pages deployment, has not executed yet. Do that before trusting
-  it blindly the first time a real domain is wired up.
+- `docs.yml` — DocC → GitHub Pages for flight/hangar/flight-data. **Run
+  for real** (GitHub Pages enabled via the API, `gh workflow run`
+  triggered) — and it caught a real bug on the first attempt that no
+  local test could have: the `swift:6.3.3` container image has no Python
+  at all, so `generate-docs-index.py` failed with `python3: not found`
+  after all three repos' DocC generation had already succeeded. Every
+  local dev machine has python3, so this was invisible until the
+  workflow actually ran in its real environment. Fixed with an
+  `apt-get install -y python3` step; re-triggered to confirm the fix —
+  see the next status update for the outcome once that run completes.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
