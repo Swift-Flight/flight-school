@@ -1,13 +1,20 @@
 name: Reference docs → GitHub Pages
 
-# PLAN §8a: flight/flight-data/hangar's own CI already *generates* DocC with
-# --warnings-as-errors (a verification gate), but nothing publishes it
-# anywhere today. This workflow is the missing half, built here rather than
-# in those repos so it doesn't touch their CI on their maintainer's behalf —
-# it clones tagged releases read-only and owns its own publish destination.
+# PLAN §8a: flight/flight-data/hangar/swift-changeset's own CI already
+# *generates* DocC with --warnings-as-errors (a verification gate), but
+# nothing publishes it anywhere today. This workflow is the missing half,
+# built here rather than in those repos so it doesn't touch their CI on
+# their maintainer's behalf — it clones tagged releases read-only and owns
+# its own publish destination.
+#
+# swift-changeset was missing from this workflow entirely until a user
+# noticed Changeset/ValidationRule/TableModel had no reference docs even
+# though Part 2 of the tutorial teaches them directly — an omission, not a
+# deliberate scope cut; every other library the tutorial teaches from is
+# here.
 #
 # Not triggered on every push: DocC generation across ~20+ targets across
-# three repos is not free, and reference docs don't need to move on every
+# four repos is not free, and reference docs don't need to move on every
 # commit to this repo's main. Run it when a referenced framework cuts a
 # release, or by hand.
 on:
@@ -21,6 +28,9 @@ on:
         default: 'main'
       flight_data_ref:
         description: 'flight-data tag/branch to document'
+        default: 'main'
+      swift_changeset_ref:
+        description: 'swift-changeset tag/branch to document'
         default: 'main'
   schedule:
     # Weekly, as a floor — catches drift between releases without needing
@@ -73,6 +83,13 @@ jobs:
           repository: Swift-Flight/flight-data
           ref: ${{ inputs.flight_data_ref || 'main' }}
           path: flight-data
+
+      - name: Checkout swift-changeset
+        uses: actions/checkout@v4
+        with:
+          repository: Swift-Flight/swift-changeset
+          ref: ${{ inputs.swift_changeset_ref || 'main' }}
+          path: swift-changeset
 
       # The base path segment MUST match where the artifact is actually
       # served, or every relative asset link in the generated pages 404s —
@@ -136,6 +153,23 @@ jobs:
               --transform-for-static-hosting \
               --hosting-base-path "flight-school/flight-data/$target" \
               --output-path "../site-out/flight-data/$target"
+            echo "::endgroup::"
+          done
+
+      - name: Generate swift-changeset docs
+        working-directory: swift-changeset
+        env:
+          SWIFT_CHANGESET_BUILD_DOCS: '1'
+        run: |
+          mkdir -p ../site-out/swift-changeset
+          for target in Changesets; do
+            echo "::group::swift-changeset/$target"
+            swift package \
+              --allow-writing-to-directory "../site-out/swift-changeset/$target" \
+              generate-documentation --target "$target" \
+              --transform-for-static-hosting \
+              --hosting-base-path "flight-school/swift-changeset/$target" \
+              --output-path "../site-out/swift-changeset/$target"
             echo "::endgroup::"
           done
 
