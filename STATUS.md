@@ -4,15 +4,14 @@ What's actually built, verified, and running, versus what's still just in
 `PLAN.md`. Updated as milestones land — see `PLAN.md` §10 for the full
 milestone list this maps onto.
 
-## Done (M0 — tutorial text complete; guides and DocC nearly there)
+## Done (M0 — content complete; confirming DocC is the last piece)
 
 Per `PLAN.md` §10, M0 is "SvelteKit site rendering guides + tutorial
-*text* (no execution); the guides link out to DocC on GitHub Pages." The
-tutorial-text half is now fully done — every part, all 39 written
-exercises. What's left to call M0 entirely closed: the other 4 guides
-(nice-to-have completionism — the site already satisfies M0's own
-definition without them) and confirming the just-fixed `docs.yml` run
-succeeds end to end, including the actual Pages deployment.
+*text* (no execution); the guides link out to DocC on GitHub Pages."
+Both halves of that are now done — every tutorial part (40 of 41
+exercises) and all 13 planned guides. What's left to call M0 entirely
+closed is confirming the just-fixed `docs.yml` run succeeds end to end,
+including the actual Pages deployment — in progress as of this writing.
 
 **Site.** SvelteKit 5 (Svelte `5.56.1`, verified — not just requested),
 `adapter-node`, deployed via `docker compose up -d` (Caddy + site).
@@ -59,9 +58,9 @@ flight-cli's actual templates/README, not invented:
   the measured join-storm cost), the four teardown paths, testing
   channels, the PubSub clustering seam, a capstone tying every seam
   together, and deployment. **This completes every part of the tutorial
-  curriculum** — Parts 0 through 4, 39 of 41 planned exercises written
-  (the other 2 are `01-basics/06-cookies`, deliberately deferred — see
-  below — and this count already excludes it).
+  curriculum** — Parts 0 through 4, 40 of 41 planned exercises written.
+  The one gap is `01-basics/06-cookies`, deliberately deferred — see
+  below.
 - Parts 3 and 4 both leaned on parallel research agents, one per
   independent subsystem, rather than one sequential pass — each agent's
   findings were cross-checked before anything got written from them,
@@ -80,13 +79,15 @@ flight-cli's actual templates/README, not invented:
   otherwise cites, so the numbers hold today, but re-verify before
   citing them again far in the future, and don't treat that directory as
   version-controlled safety net the way every other cited repo is.
-- 7 reference guides (Routing and Controllers, Requests & Responses,
-  Configuration, Queries, Changesets, Associations & Preloading,
-  Transactions & Multi) — repackaging Part 1/Part 2 material already
-  verified while writing the tutorial, not separately re-verified.
-- "Hangar: Getting Started" — also **fixed**: it originally had the same
-  two invented-API mistakes as Hangar's README below, inherited when it
-  was written before this session's verification pass existed.
+- **All 13 planned guides**, every one in `guides.ts` now real: Up and
+  Running (Part 0), Routing and Controllers, Requests & Responses,
+  Configuration, Testing, Deployment (Flight); Hangar Getting Started,
+  Queries, Changesets, Associations & Preloading, Transactions & Multi
+  (Hangar); Channels, Presence (Realtime) — repackaging tutorial material
+  already verified while writing Parts 1–4, not separately re-verified.
+  "Hangar: Getting Started" was also **fixed**: it originally had the
+  same two invented-API mistakes as Hangar's README below, inherited
+  when it was written before this session's verification pass existed.
 
 **Real bugs found upstream while verifying, not fixed there** (out of
 scope — those repos have their own in-progress work and their docs
@@ -168,39 +169,37 @@ current flat files are the final shape.
 - Everything requiring either of the above: the snippet/db/app/app+db
   execution tiers, the embedded editor, "Solve" diffing, session
   presence, the preview proxy.
-- The remaining 4 guides (Testing, Channels, Presence, Deployment) —
-  titles and descriptions exist in `guides.ts`; the prose doesn't yet.
-  Every fact they'd need is already verified from writing Parts 3–4, the
-  same as the 7 guides already written.
 
 ## If you're picking this up cold
 
 Read `PLAN.md` first, all of it — §7a and §8a in particular record two
 corrections made *after* the original plan was written, each from
 actually checking a claim against source rather than trusting the first
-draft. The pattern is worth continuing: before writing an exercise for
-Part 4, check whether flight-cli's `TUTORIAL.md` or `demo` tier already
-covers that ground (per §7a, it covers more than the benchmark app does),
-and don't assume a config/CLI flag/API shape without grepping the real
-source first — this plan has already been wrong twice in ways that only
-source-checking caught, and the "real bugs found upstream" list above has
-grown to seven instances since. Note that `flight-cli` itself carries no
-tags at all (`git tag --list` is empty there) — there's no release
-boundary to check its templates/`TUTORIAL.md` against the way there is
-for `flight`/Hangar/`flight-data`; treat its `main` as the only version
-that exists.
+draft. The tutorial curriculum itself is now fully written (see above),
+so the immediate next work here is more likely to be M1+ (the execution
+tiers) than new tutorial content — but if a gap does turn up (a new
+flight/Hangar/flight-data release unblocking `06-cookies`, a curriculum
+correction, a new guide), the same pattern that got the rest of this
+content right still applies: don't assume a config/CLI flag/API shape
+without grepping the real source first — this plan has already been
+wrong twice in ways that only source-checking caught, and the "real bugs
+found upstream" list above has grown to seven instances since. Note that
+`flight-cli` itself carries no tags at all (`git tag --list` is empty
+there) — there's no release boundary to check its templates/`TUTORIAL.md`
+against the way there is for `flight`/Hangar/`flight-data`; treat its
+`main` as the only version that exists.
 
-Part 3's verification used parallel research agents (one per subsystem —
-uploads, SSE, scheduling, actuator, testing) rather than one sequential
-pass, since the subsystems were independent and each needed its own deep
-source dive. It worked well and is worth repeating for Part 4, which has
-even more independent-feeling ground (Channels, Presence, PubSub,
-clustering, deployment) — but an agent's findings still got cross-checked
-before anything was written from them, the same as any other source.
-One of those five findings (testing) directly corrected a claim already
-published in Part 0's `04-running.md` about what `TestClient` actually is
-— re-reading earlier content in light of later findings is still worth
-doing, not just trusting it because it already shipped.
+Parts 3 and 4's verification used parallel research agents, one per
+independent subsystem, rather than one sequential pass through
+everything — it worked well for both and is worth reaching for again any
+time a body of work splits cleanly into independent pieces, whether
+that's more tutorial content or something else entirely. An agent's
+findings still got cross-checked before anything was written from them,
+the same as any other source — one of Part 4's findings (testing)
+directly corrected a claim already published in Part 0's
+`04-running.md` about what `TestClient` actually is, which is the
+reminder worth keeping: re-read earlier content in light of later
+findings, don't just trust it because it already shipped.
 
 Before trusting any upstream package as a source of truth, check it's
 not mid-edit: `git status --short` in that package's own checkout, and if
