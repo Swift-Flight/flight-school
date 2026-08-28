@@ -868,6 +868,137 @@ Postgres plan (`Seq Scan on issues ... Rows Removed by Filter: 194`) and,
 after the logger fix, its repeated-query detector fired for real on a
 genuine one-parent-at-a-time reporter lookup.
 
+## M3 in progress: the app tier and the preview proxy, wired to one exercise
+
+M3 (PLAN §10) is the `app` execution tier — a learner editing files in a
+real Flight application, the runner rebuilding and *restarting a live
+server*, and a preview proxy embedding that server in an iframe. The scope
+of this pass is deliberately the architecture plus **one** exercise
+(`01-basics/02-first-route`) proving it end to end, exactly the way
+`06-preloading` proved the `db` tier before the other five were migrated.
+Parts 1 and 3's remaining exercises are explicit follow-up, not something
+this claims to have finished.
+
+**The design decision that matters most, and the second-pass catch behind
+it**: the app tier's `/run` SSE stream ends at a new `server_started`
+event, and the spawned server outlives the request that started it. The
+obvious port of the snippet tier's model — stream until the process exits
+— would have held one HTTP request open for the whole session (up to the
+hard cap, an hour) across Caddy, the server's consuming task, and the
+browser's `EventSource`, none of which has ever been exercised at that
+duration here. Decoupling also kept an existing invariant intact rather
+than discarding it: `RunnerClient`'s run timeout is still comfortably
+longer than the runner's own cap (60s vs. the app tier's 30s build cap),
+so the runner remains the side that times out first. Had the stream stayed
+open, that timeout would have had to exceed the session hard cap instead.
+
+The honest cost, stated rather than hidden: the learner sees build output
+and then nothing — a running app's own logs don't stream anywhere yet.
+That wants its own long-lived, independently reconnectable endpoint, not
+an overloaded `/run`. Ending the stream early also introduced exactly one
+new failure mode, so it got a deliberate mitigation rather than being
+discovered later: a server that spawns and *dies immediately* (boot-time
+`fatalError`, bad config, port already bound) would otherwise report
+`server_started` and simply not be there. `ProcessRunner.runApp` waits a
+500ms grace period and re-checks `isRunning`, reporting `exited` with the
+captured output instead. A server that dies *later* still shows up only as
+a failing iframe — the real limit of this design.
+
+**Two real bugs caught by running things rather than reading them**:
+
+- The article's own claim that a handler can return anything `Codable` is
+  **wrong**, and had been sitting in published prose since M0. Flight
+  requires an explicit `ResponseEncodable` conformance
+  (`error: ... requires that 'Greeting' conform to 'ResponseEncodable'`) —
+  the conformance is empty in practice, since there's a default
+  implementation for any `Encodable`, but it must be declared. Found by
+  compiling the article's own code block against the real template.
+  Both the prose and the solution file now say so, and the exercise gained
+  a short paragraph on why (plus the `Void` → 204 and `nil` → 404 rules,
+  verified from the same source).
+- `makeRepo()`-style silent no-op, app-tier edition: the vendored template
+  binds `server.host: 127.0.0.1`, unreachable from Caddy in another
+  container. The fix (`FLIGHT_SERVER_HOST=0.0.0.0`, since Flight layers
+  env over file config) was **verified as a real behavioral change, not
+  assumed from the config-key mapping**: run without it, `ss` shows
+  `127.0.0.1:8080`; run with it, `0.0.0.0:8080`. The plan had flagged
+  "whether the env source is even layered in by default" as the one
+  unverified assumption everything downstream rested on, with a
+  template-edit fallback ready. It wasn't needed.
+
+**Verified against real containers, with real output** (never a status
+code alone — the rule this file already sets):
+
+- **The preview route, standalone, before any of the Swift existed** — a
+  placeholder app on `runner-1:8080` answering `/preview/runner-1/hello`
+  through a real Caddy with the real Caddyfile, echoing back
+  `path-as-seen-by-app: /hello` to prove prefix-stripping actually
+  happened. `caddy adapt` confirms all four preview routes land *before*
+  the unconditional catch-all, and the other routes still dial their own
+  upstreams (`/`→site, `/api/*`→server).
+- **The whole app-tier sequence against the raw supervisor** (no server,
+  no site): `/lease` with `X-Tier: app` → multi-file `/write` → `/run`
+  streaming `build_output` → `build_done` → `run_output` →
+  `server_started`, **and then the stream closing, in 7.96s**. That
+  closing is the decoupling working: a stream still open at that point
+  would have meant `runApp` was awaiting the server and the entire
+  timeout analysis was wrong. `ps` confirms the server process outlives
+  the request that started it.
+- **Both routes through the whole chain**: `curl` via Caddy at
+  `/preview/runner-1/hello` and `/hello-json` returns `hello, flight` and
+  `{"message":"hello, flight"}` with `text/plain` and `application/json`
+  respectively — the exact `Content-Type` behavior the article claims.
+- **The write allowlist, on disk and not just in the response.**
+  `Package.swift` and a `../`-climbing path are both refused with 400 and
+  a message naming the editable roots; `grep` confirms `Package.swift` was
+  never modified and the climbing target was never created. (14 unit-level
+  cases were checked first, including the `Sources/AppEvil` prefix-
+  confusion case a naive `hasPrefix` would have allowed through.)
+- **The crash-at-boot path** — the one new failure mode the decoupled
+  stream introduces, so it was tested deliberately rather than assumed. A
+  second process squatting port 8080 makes the learner's app die during
+  startup; the run correctly reports `run_output` carrying the real
+  diagnostic (`App failed to start: bind... Address already in use`)
+  followed by `exited: 1`, **not** a false `server_started`. Without the
+  500ms grace check this would have claimed success and left a silently
+  broken preview.
+- **Reset keeps the warm build.** After `/reset`: the learner's file is
+  gone, the template's `HealthController.swift` is back, the server is
+  killed — and `.build` is still there at 1.2G. That's the whole point of
+  scoping the restore to the editable subtrees rather than replacing the
+  workspace.
+- **The snippet tier is unregressed.** A lease with *no* `X-Tier` header
+  still defaults to snippet, the old single-string `{"content": ...}`
+  write shape still works, and `02-data/07-joins` still produces its real
+  joined rows against real seeded Postgres and exits 0.
+
+**The warm-up cost, now measured rather than predicted**: 840.8s for the
+snippet workspace plus 653.3s for the app workspace — **1494s, 24.9
+minutes**, almost exactly the ~25 min the plan projected. Two warm
+`.build` trees occupy **2.1G of the 4G tmpfs (53%)**, which retroactively
+justifies raising it: the previous 2g would have run out. This is a
+one-time cost per container start (a warm rebuild is ~1.4s), but it is a
+real tax on the development loop, and the mitigation used here was simply
+not restarting the container between verification steps. Warming the two
+concurrently remains available and unused: at `cpus: 2.0` the builds would
+mostly contend rather than overlap, so it trades log legibility for
+perhaps a third off a cost that is already paid once.
+
+**Network topology**: a new `preview` network carries Caddy and the four
+runners' port 8080 and nothing else. Deliberately *not* Caddy joining
+`runner-internal`: that network also carries Postgres and every runner's
+supervisor control API (port 9000), none of which Caddy has any business
+reaching. Both networks stay `internal: true`.
+
+**Not verified, and not claimed**: the tier-mismatch re-lease path (the
+one genuinely new piece of *server* logic — a snippet-tier session cookie
+arriving at an app-tier exercise), and the full browser-shaped run through
+site + server rather than against the supervisor directly. The remaining
+known limits — prefix-stripping, which will block `07-static-assets` until
+a per-runner hostname exists, and the iframe `sandbox` being nominal
+rather than load-bearing — are recorded in the plan file and in comments
+at the exact places they'd bite (`Caddyfile`, `AppEditor.svelte`).
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with

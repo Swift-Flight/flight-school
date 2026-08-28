@@ -1,0 +1,5 @@
+{
+  "runtime": "app",
+  "template": "skeleton",
+  "focus": ["Sources/App/Controllers/GreetingController.swift"]
+}

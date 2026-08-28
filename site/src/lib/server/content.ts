@@ -132,3 +132,57 @@ export async function loadSnippet(relativePath: string): Promise<string | null> 
 	if (!existsSync(fullPath)) return null;
 	return readFile(fullPath, 'utf-8');
 }
+
+export interface AppExercise {
+	doc: RenderedDoc;
+	/** Relative path, inside the project, of the file the editor opens. */
+	focus: string;
+	/** `app-a`'s content for `focus` — empty when the learner starts from
+	 *  a blank file, which is not the same as the exercise being unwritten. */
+	initialCode: string;
+	template: string;
+}
+
+/**
+ * Reads an `app`-tier exercise: PLAN §6's real shape, a directory holding
+ * `README.md` + `meta.json` + `app-a`/`app-b` diffs against a named
+ * `flight-cli` template, rather than the snippet tier's flatter
+ * one-markdown-plus-one-sibling-file layout (see `loadSnippet`).
+ *
+ * Only `focus[0]` is read today. `meta.json` already carries `focus` as an
+ * array because the format shouldn't have to change to describe a
+ * multi-file exercise — but no exercise needs one yet, and the editor has
+ * no file tree to show one in, so reading the rest would be building for a
+ * caller that doesn't exist.
+ *
+ * `app-b` (the solution) is deliberately not read here: nothing serves it
+ * yet. Solve-diff UX is PLAN §10's M5.
+ */
+export async function loadAppExercise(relativeDir: string): Promise<AppExercise | null> {
+	const fullPath = path.join(CONTENT_ROOT, relativeDir);
+	if (!fullPath.startsWith(CONTENT_ROOT)) return null;
+	if (!existsSync(path.join(fullPath, 'meta.json'))) return null;
+
+	const doc = await loadDoc(path.join(relativeDir, 'README.md'));
+	if (!doc) return null;
+
+	let meta: { template?: string; focus?: string[] };
+	try {
+		meta = JSON.parse(await readFile(path.join(fullPath, 'meta.json'), 'utf-8'));
+	} catch {
+		return null;
+	}
+	const focus = meta.focus?.[0];
+	if (!focus) return null;
+
+	// Absent app-a file means "start from empty", which is a real and
+	// common case (this exercise's own task is creating the file), not a
+	// missing-content case — unlike an absent meta.json or README above.
+	const startingPath = path.join(fullPath, 'app-a', focus);
+	const initialCode =
+		startingPath.startsWith(fullPath) && existsSync(startingPath)
+			? await readFile(startingPath, 'utf-8')
+			: '';
+
+	return { doc, focus, initialCode, template: meta.template ?? 'skeleton' };
+}

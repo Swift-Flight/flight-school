@@ -15,6 +15,14 @@ services:
     depends_on:
       - site
       - server
+    networks:
+      - default
+      - preview
+    # `preview` (M3) is how `/preview/runner-N/*` reaches a learner's
+    # running app. Deliberately NOT `runner-internal`: that network also
+    # carries Postgres and every runner's control-plane port 9000, none of
+    # which Caddy has any business reaching. `preview` carries exactly one
+    # thing — port 8080 on each runner.
 
   site:
     build:
@@ -80,19 +88,39 @@ services:
       # `exec` is required, not optional: SwiftPM compiles and then
       # executes a temporary manifest-evaluation binary under `/tmp` on
       # every build, and Docker's tmpfs mounts are `noexec` by default.
-      - /workspace:size=2g,uid=10001,gid=10001,exec
+      # Sized for *two* warm `.build` trees since M3, not one — the
+      # snippet tier's (Hangar/PostgresNIO) and the app tier's
+      # (FlightWeb/FlightTransport/FlightActuator). Measure before
+      # trimming: `du -sh /workspace/*` in a warmed container is the
+      # honest number.
+      - /workspace:size=4g,uid=10001,gid=10001,exec
       - /tmp:size=256m,uid=10001,gid=10001,exec
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
-    mem_limit: 4g
+    # tmpfs pages count against the container's memory, so this and the
+    # 4g workspace above are not independent knobs: the limit has to cover
+    # both the workspace contents *and* swift-frontend's own RSS during a
+    # build, or the build gets OOM-killed rather than slowed down. Raised
+    # alongside the tmpfs bump above for exactly that reason.
+    mem_limit: 8g
     cpus: 2.0
     networks:
       - runner-internal
-    # No `ports:`/`expose:` — nothing outside `runner-internal` can reach
-    # this at all, including the host. The server joins this same
-    # network to lease sessions from the pool by service name
-    # (`runner-1:9000`, matching the supervisor's `EXPOSE 9000`).
+      - preview
+    expose:
+      # The app tier's learner-facing HTTP port (M3) — reachable only from
+      # `preview`, i.e. only from Caddy, and only for `/preview/runner-N/*`.
+      # The supervisor's own control port (9000) stays off `preview`
+      # entirely: `expose` here is per-container, but network membership is
+      # what actually decides who can dial it, and Caddy is not on
+      # `runner-internal`.
+      - '8080'
+    # Still no `ports:` — nothing on the *host* can reach this directly.
+    # The server joins `runner-internal` to lease sessions from the pool by
+    # service name (`runner-1:9000`, matching the supervisor's
+    # `EXPOSE 9000`); Caddy joins `preview` to proxy port 8080 and nothing
+    # else.
 
   runner-2:
     <<: *runner-base
@@ -141,6 +169,16 @@ networks:
   # make the whole pool unleasable. Postgres, once it exists, joins this
   # same network so runners can still reach exactly that one thing.
   runner-internal:
+    internal: true
+
+  # M3's preview path: Caddy + the four runners' port 8080, nothing else.
+  # Also `internal: true` — this network never needs a route off the box;
+  # Caddy reaches the outside world through `default`, and a learner's app
+  # gets no egress from being on this network any more than it did before.
+  # Kept separate from `runner-internal` on purpose: putting Caddy there
+  # instead would have handed it Postgres and every supervisor control API
+  # too, for no benefit.
+  preview:
     internal: true
 
 volumes:

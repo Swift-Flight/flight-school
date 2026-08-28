@@ -7,10 +7,22 @@ import Foundation
 /// recorded here until the runner has actually confirmed it. An actor
 /// because it's mutated from concurrent request handlers and the
 /// background reaper alike.
+/// Mirrors the runner supervisor's own `Tier` (PLAN §3's execution tiers).
+/// Duplicated rather than shared: `server` and `runner/supervisor` are
+/// separate SPM packages with no module in common, and one two-case enum
+/// is not worth a package to share it. The wire contract — the `X-Tier`
+/// header's string values — is what actually has to agree, and that's
+/// exercised end to end rather than enforced by a type.
+enum Tier: String, Sendable {
+    case snippet
+    case app
+}
+
 actor SessionBroker {
     struct RunnerLease: Sendable {
         let runnerBaseURL: String
         let leaseID: String
+        let tier: Tier
     }
 
     enum BrokerError: Error, CustomStringConvertible, Sendable {

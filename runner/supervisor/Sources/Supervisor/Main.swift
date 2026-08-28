@@ -36,7 +36,16 @@ struct Main {
             // is correctly fast — so the fix is paying this cost once,
             // here, before the container starts accepting leases, rather
             // than making an unlucky learner's first session pay it.
-            try warmUp(workspace: URL(fileURLWithPath: workspacePath))
+            // One warm workspace per tier (PLAN §4's "prebuilt workspaces,
+            // one per execution tier/template") — the pool stays
+            // undifferentiated, so every runner must be ready to serve
+            // either tier. Sequential rather than concurrent: the
+            // container is capped at 2 CPUs, so two `swift build`s would
+            // mostly contend rather than overlap.
+            for tier in [Tier.snippet, Tier.app] {
+                try warmUp(
+                    workspace: URL(fileURLWithPath: workspacePath).appending(path: tier.rawValue))
+            }
 
             try await Flight.bootstrap(
                 configuration: configuration,
