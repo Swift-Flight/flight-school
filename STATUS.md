@@ -4,7 +4,15 @@ What's actually built, verified, and running, versus what's still just in
 `PLAN.md`. Updated as milestones land — see `PLAN.md` §10 for the full
 milestone list this maps onto.
 
-## Done (M0, in progress)
+## Done (M0 — tutorial text complete; guides and DocC nearly there)
+
+Per `PLAN.md` §10, M0 is "SvelteKit site rendering guides + tutorial
+*text* (no execution); the guides link out to DocC on GitHub Pages." The
+tutorial-text half is now fully done — every part, all 39 written
+exercises. What's left to call M0 entirely closed: the other 4 guides
+(nice-to-have completionism — the site already satisfies M0's own
+definition without them) and confirming the just-fixed `docs.yml` run
+succeeds end to end, including the actual Pages deployment.
 
 **Site.** SvelteKit 5 (Svelte `5.56.1`, verified — not just requested),
 `adapter-node`, deployed via `docker compose up -d` (Caddy + site).
@@ -44,10 +52,34 @@ flight-cli's actual templates/README, not invented:
   it), authentication via `TokenValidator`/OIDC, multipart + resumable
   (tus 1.0) uploads, server-sent events, `@Scheduler`/fleet-wide-once
   scheduling, the actuator's real health/dashboard split, and the three
-  real sizes of test. Verification for this part leaned on parallel
-  research agents per subsystem rather than one pass through everything —
-  each agent's findings were cross-checked before anything got written
-  from them, same bar as everywhere else in this file.
+  real sizes of test.
+- Part 4 (Advanced: realtime and beyond), all 9 exercises: raw
+  WebSockets vs. Channels, the envelope protocol (join/handle/reply/
+  broadcast), HTTP-to-socket fan-out, Presence (metas, state-then-diffs,
+  the measured join-storm cost), the four teardown paths, testing
+  channels, the PubSub clustering seam, a capstone tying every seam
+  together, and deployment. **This completes every part of the tutorial
+  curriculum** — Parts 0 through 4, 39 of 41 planned exercises written
+  (the other 2 are `01-basics/06-cookies`, deliberately deferred — see
+  below — and this count already excludes it).
+- Parts 3 and 4 both leaned on parallel research agents, one per
+  independent subsystem, rather than one sequential pass — each agent's
+  findings were cross-checked before anything got written from them,
+  same bar as everywhere else in this file. Part 4 specifically used a
+  real, unique source: a benchmark project
+  (`/home/sinner/swift/SwiftFlight/benchmark/`) that built the same
+  realtime issue board twice — once on Flight, once hand-rolled against
+  Hummingbird — specifically to measure what Channels is worth. Real
+  numbers from it are cited directly in `04-advanced/01-websockets.md`
+  and `08-capstone.md` (infrastructure: 0 lines vs. 315; feature layers
+  within 7 lines of each other). That benchmark directory is **not a git
+  repo** and its own `Package.swift` uses a path dependency on `flight`
+  rather than a pinned tag (its own comment already flags this as "wrong
+  for a citable result") — the Channels/Presence/PubSub source files it
+  exercises haven't changed since well before the tag this tutorial
+  otherwise cites, so the numbers hold today, but re-verify before
+  citing them again far in the future, and don't treat that directory as
+  version-controlled safety net the way every other cited repo is.
 - 7 reference guides (Routing and Controllers, Requests & Responses,
   Configuration, Queries, Changesets, Associations & Preloading,
   Transactions & Multi) — repackaging Part 1/Part 2 material already
@@ -136,9 +168,10 @@ current flat files are the final shape.
 - Everything requiring either of the above: the snippet/db/app/app+db
   execution tiers, the embedded editor, "Solve" diffing, session
   presence, the preview proxy.
-- Part 4 of the curriculum (Parts 1–3 are written — see above), and the
-  remaining guides (Testing, Channels, Presence, Deployment) — titles and
-  descriptions exist in the manifests; the prose doesn't yet.
+- The remaining 4 guides (Testing, Channels, Presence, Deployment) —
+  titles and descriptions exist in `guides.ts`; the prose doesn't yet.
+  Every fact they'd need is already verified from writing Parts 3–4, the
+  same as the 7 guides already written.
 
 ## If you're picking this up cold
 
