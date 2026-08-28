@@ -10,28 +10,28 @@ actually changed and accumulating validation failures before anything
 reaches the database:
 
 ```swift
-let changeset = Changeset(Post.self)
+let changeset = Changeset(Issue.self)
     .change(\.title, body.title)
-    .change(\.published, false)
+    .change(\.status, "open")
     .validate(\.title, .length(1...200))
 
 guard changeset.isValid else {
     return try Response.json(changeset.messagesByField, status: .unprocessableContent)
 }
 
-let post = try await repo.insert(changeset)
+let issue = try await repo.insert(changeset)
 ```
 
-`Changeset(Post.self)` starts an **insert** — no original row, so every
-`change` is dirty by definition. `Changeset(original: existingPost)` starts
-an **update**, and which one you built decides whether `repo.insert` or
-`repo.update` is the right call — both take a `Changeset<Model>` and return
+`Changeset(Issue.self)` starts an **insert** — no original row, so every
+`change` is dirty by definition. `Changeset(original: existingIssue)`
+starts an **update**, and the distinction matters downstream:
+`repo.insert` and `repo.update` both take a `Changeset<Model>` and return
 the materialized row.
 
 ## Validation only looks at what changed
 
 ```swift
-Changeset(original: post)
+Changeset(original: issue)
     .change(\.title, "")
     .validate(\.title, .length(1...200))
     .errors    // [title: length must be within 1...200]
@@ -58,8 +58,8 @@ check is safe:
 
 ```swift
 do {
-    let post = try await repo.insert(changeset)
-    return try Response.json(post, status: .created)
+    let issue = try await repo.insert(changeset)
+    return try Response.json(issue, status: .created)
 } catch let error as ChangesetValidationError {
     return try Response.json(error.messagesByField, status: .unprocessableContent)
 }
@@ -71,8 +71,8 @@ body wants, without hand-rolling `Dictionary(grouping:)` over `.errors`.
 
 ## Where to go next
 
-- [Queries](/guides/hangar-queries) — bulk writes, the counterpart for
-  "the same values, every matching row" instead of one validated row.
+- [Queries](/guides/hangar-queries) — bulk writes, for "the same values,
+  every matching row" instead of a multi-step unit of work.
 - [Associations & Preloading](/guides/hangar-preloading) — reading related
   rows back out once they're written.
 

@@ -579,6 +579,51 @@ Whoever next has an actual browser available should open
 `/tutorial/02-data/03-predicates` and click Run before trusting this
 further.
 
+## M2, starting: migrated Part 2's no-DB content to the shared domain first
+
+Before any M2 infrastructure, a real fork surfaced and got resolved: PLAN
+§4 calls for one domain (issues/projects/users, reused from the benchmark
+suite) across the tutorial, benchmark, and capstone — "the capstone can
+never silently rot" depends on this — but the five already-wired,
+already-verified Part 2 exercises (`01-entities` through `05-associations`)
+used a different, unrelated domain (`Post`/`Author`/`Comment`) that
+predates this session's work. Asked the user directly rather than picking
+silently; the answer was to migrate now, before more DB-tier content gets
+built on the wrong domain and the cost only grows.
+
+All five exercises' articles and starting `.swift` snippets, plus the four
+Hangar guides that shared examples with them
+(`hangar-getting-started.md`, `hangar-queries.md`, `hangar-preloading.md`,
+`hangar-changesets.md`), were rewritten against `Issue`/`Project`/`User`
+(matching `benchmark/harness/schema.sql`'s real column names exactly —
+`project_id`, `reporter_id`, `assignee_id`, `updated_at` — so M2's actual
+seed schema, not yet built, will already match what these articles show)
+and **every debugSQL/compile claim was re-verified against a real runner,
+not translated by find-and-replace and trusted**. That re-verification
+caught that the migration was a net *improvement*, not just a reskin:
+`Issue.assigneeID` is a genuinely nullable foreign key in the real schema,
+so the "nullable FK is a nullable `Loadable`" lesson in `05-associations`
+and `hangar-preloading.md` now demonstrates a real column instead of an
+invented `editorID` that only ever existed to illustrate the point.
+
+`site/`'s type-check, production build, and `scripts/check-content-links.py`
+all pass clean against the migrated content.
+
+**Left deliberately unmigrated, not overlooked**: `06-preloading` through
+`12-diagnostics` and `03-intermediate/01-repo-wiring` still reference
+`Post`/`Comment`/`Author` — these are real, substantively-authored prose
+(50–66 lines each) from before this session, not stubs. Migrating them
+blind (text-only, unverified) would repeat exactly the mistake this
+session's whole discipline exists to avoid — a "translated" example is a
+claim, not a fact, until something actually runs it. Each will be migrated
+as part of building and wiring it during M2, the same one-exercise-at-a-time
+verification discipline used for Part 2's no-DB half. `Post` also appears
+incidentally in three Part 1 materials (`01-basics/03-parameters.md`,
+`01-basics/05-responses.md`, and two guides) as a generic "a route handler
+returns a model" example, unconnected to the Hangar/Changeset curriculum
+this decision was actually about — left alone; revisit only if full
+site-wide domain consistency is ever explicitly wanted.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with

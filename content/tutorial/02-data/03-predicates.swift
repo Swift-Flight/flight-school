@@ -1,13 +1,13 @@
 import Foundation
 import Hangar
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
+    var status: String
+    var priority: String
 }
 
-let query = Post.where { $0.published == true && $0.viewCount > 100 }
+let query = Issue.where { $0.status == "open" && $0.priority == "urgent" }
 print(query.debugSQL)

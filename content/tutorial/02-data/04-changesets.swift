@@ -1,17 +1,16 @@
 import Foundation
 import Hangar
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
+    var status: String
 }
 
-let post = Post(id: UUID(), title: "Hello, Hangar", viewCount: 0, published: false)
+let issue = Issue(id: UUID(), title: "Login button unresponsive", status: "open")
 
-let changeset = Changeset(original: post)
+let changeset = Changeset(original: issue)
     .change(\.title, "")
     .validate(\.title, .length(1...200))
 

@@ -9,28 +9,29 @@ actually changed and accumulating validation failures before anything
 reaches the database:
 
 ```swift
-let changeset = Changeset(Post.self)
+let changeset = Changeset(Issue.self)
     .change(\.title, body.title)
-    .change(\.published, false)
+    .change(\.status, "open")
     .validate(\.title, .length(1...200))
 
 guard changeset.isValid else {
     return try Response.json(changeset.messagesByField, status: .unprocessableContent)
 }
 
-let post = try await repo.insert(changeset)
+let issue = try await repo.insert(changeset)
 ```
 
-`Changeset(Post.self)` starts an **insert** changeset — no original row, so
-every `change` is dirty by definition. `Changeset(original: existingPost)`
+`Changeset(Issue.self)` starts an **insert** changeset — no original row, so
+every `change` is dirty by definition. `Changeset(original: existingIssue)`
 starts an **update** instead, and the distinction matters downstream:
-`repo.insert` and `repo.update` both take a `Changeset<Post>` and return the
-materialized `Post`, but which one you call depends on which kind you built.
+`repo.insert` and `repo.update` both take a `Changeset<Issue>` and return
+the materialized `Issue`, but which one you call depends on which kind you
+built.
 
 ## Validation only looks at what changed
 
 ```swift
-Changeset(original: post)
+Changeset(original: issue)
     .change(\.title, "")
     .validate(\.title, .length(1...200))
     .errors    // [title: length must be within 1...200]
@@ -61,8 +62,8 @@ manual check is safe — it costs you the chance to answer with field errors
 
 ```swift
 do {
-    let post = try await repo.insert(changeset)
-    return try Response.json(post, status: .created)
+    let issue = try await repo.insert(changeset)
+    return try Response.json(issue, status: .created)
 } catch let error as ChangesetValidationError {
     return try Response.json(error.messagesByField, status: .unprocessableContent)
 }

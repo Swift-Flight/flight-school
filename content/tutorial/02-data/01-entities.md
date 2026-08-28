@@ -8,29 +8,29 @@ A table-backed model is a plain struct, three macros away from everything
 Hangar needs to query it:
 
 ```swift
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
+    var projectID: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
+    var status: String
 }
 ```
 
-`@Entity("posts")` names the table explicitly — Hangar never pluralizes or
+`@Entity("issues")` names the table explicitly — Hangar never pluralizes or
 guesses a table name from a type name, because guessing is wrong often
 enough that typing it once is cheaper. `@ID` marks the primary key. Neither
-`title`, `viewCount`, nor `published` needs its own annotation: every plain
+`projectID`, `title`, nor `status` needs its own annotation: every plain
 stored property becomes a column automatically, named by converting its
-Swift name from `camelCase` to `snake_case` — `viewCount` reads and writes
-the `view_count` column without you saying so.
+Swift name from `camelCase` to `snake_case` — `projectID` reads and writes
+the `project_id` column without you saying so.
 
 ## `@Column`, only when the name actually needs overriding
 
 A property whose name doesn't match its column gets an explicit one:
 
 ```swift
-@Column("legacy_title") var title: String
+@Column("legacy_status") var status: String
 ```
 
 That's the entire job `@Column` does — it takes no other form. Writing it
@@ -42,10 +42,10 @@ decorated silently doing nothing.
 Four things, from that one `@Entity` line:
 
 - **`Columns`**, a struct with one typed `Column<T>` per property —
-  `Post.Columns.viewCount` — which is what a closure like
-  `{ $0.viewCount > 100 }` in the next exercise is actually a closure over.
-  Reference a property that doesn't exist and the error is the same one
-  you'd get misspelling any other member: `Post.Columns` has no such
+  `Issue.Columns.status` — which is what a closure like
+  `{ $0.status == "open" }` in the next exercise is actually a closure
+  over. Reference a property that doesn't exist and the error is the same
+  one you'd get misspelling any other member: `Issue.Columns` has no such
   property, caught before the build finishes.
 - **`init(from: PostgresRow)`**, a positional row decoder generated at
   compile time — no reflection, no string-keyed dictionary lookup per row.
@@ -54,7 +54,7 @@ Four things, from that one `@Entity` line:
   insert.
 - **A memberwise initializer.** Swift stops synthesizing its own the moment
   the macro adds `init(from:)`, so `@Entity` writes the ordinary one back:
-  `Post(id: UUID(), title: "…", viewCount: 0, published: false)` still
+  `Issue(id: UUID(), projectID: UUID(), title: "…", status: "open")` still
   works exactly as it would on a struct with no macro at all.
 
 None of this is reflection at request time — every part of it is decided

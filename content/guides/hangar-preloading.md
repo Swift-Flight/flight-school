@@ -8,12 +8,18 @@ category: Hangar
 An association's property type is `Loadable<T>`, never `T` directly:
 
 ```swift
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
-    var authorID: UUID
-    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
-    @HasMany(foreignKey: \Comment.postID) var comments: Loadable<[Comment]>
+    var projectID: UUID
+    var reporterID: UUID
+    @BelongsTo(foreignKey: \Issue.reporterID) var reporter: Loadable<User>
+}
+
+@Entity("projects")
+struct Project {
+    @ID var id: UUID
+    @HasMany(foreignKey: \Issue.projectID) var issues: Loadable<[Issue]>
 }
 ```
 
@@ -22,7 +28,7 @@ something explicitly preloads it. Reading through one that wasn't is not a
 silent `nil` and not a lazy query fired on first touch:
 
 ```swift
-let name = try post.author.get().name   // HangarError.notPreloaded("author") if nobody preloaded it
+let name = try issue.reporter.get().displayName   // HangarError.notPreloaded("reporter") if nobody preloaded it
 ```
 
 That's deliberate: lazy loading turns a missing preload into an invisible
@@ -32,25 +38,29 @@ deterministically — any test that exercises the path catches it.
 `.optional` and `.isLoaded` are the non-throwing escape hatches for the
 places absence genuinely is fine.
 
-A nullable foreign key is `Loadable<Author?>`, not a special case:
+A nullable foreign key is `Loadable<User?>`, not a special case:
 `.notLoaded` still means "nobody asked," `.loaded(nil)` means "fetched, and
-there is genuinely no author" — a different fact, which is also why
+this issue genuinely has no assignee" — a different fact, which is also why
 `Loadable` only conforms to `Encodable`, never `Decodable`: on the wire,
 `null` could never tell those two apart on the way back in.
+
+```swift
+@BelongsTo(foreignKey: \Issue.assigneeID) var assignee: Loadable<User?>
+```
 
 ## Preloading batches instead of looping
 
 ```swift
-let posts = try await repo.all(
-    Post.where { $0.published == true }
-        .preload(\.author)
-        .preload(\.comments))
+let issues = try await repo.all(
+    Issue.where { $0.status == "open" }
+        .preload(\.reporter)
+        .preload(\.assignee))
 ```
 
-Two associations, two extra queries total — never one per post. Each
+Two associations, two extra queries total — never one per issue. Each
 `.preload` runs one query keyed by every parent's foreign key at once
 (`WHERE id = ANY($1)`), then stitches results back in memory. Hangar's own
-benchmark suite measures the shape this exists for: 50 authors' posts,
+benchmark suite measures the shape this exists for: 50 users' issues,
 batched, is **2.24ms**; one query per parent (1 + 50 queries) is
 **11.10ms** — roughly 5×, and the mechanism is exactly "N round trips
 become 2," nothing more exotic.
@@ -59,8 +69,8 @@ The second argument tunes the child query without leaving the batched
 path:
 
 ```swift
-Post.where { $0.published }
-    .preload(\.comments) { $0.order { $0.createdAt.asc() }.preload(\.author) }
+Project.where { $0.id == projectID }
+    .preload(\.issues) { $0.order { $0.updatedAt.desc() }.preload(\.reporter) }
 ```
 
 A many-to-many `@HasMany(through:)` association preloads identically from

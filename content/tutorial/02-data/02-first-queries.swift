@@ -1,18 +1,19 @@
 import Foundation
 import Hangar
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
+    var status: String
+    var priority: String
+    var updatedAt: Date
 }
 
-let base = Post.where { $0.published == true }
+let base = Issue.where { $0.status == "open" }
 
-let recent = base.order { $0.viewCount.desc() }.limit(10)
-let popular = base.where { $0.viewCount > 1_000 }
+let recent = base.order { $0.updatedAt.desc() }.limit(10)
+let urgent = base.where { $0.priority == "urgent" }
 
 print(recent.debugSQL)
-print(popular.debugSQL)
+print(urgent.debugSQL)

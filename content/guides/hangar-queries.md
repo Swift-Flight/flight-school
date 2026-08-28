@@ -8,8 +8,8 @@ category: Hangar
 A query is a value, composed from an entity's generated `Columns`:
 
 ```swift
-let popular = Post.where { $0.published == true && $0.viewCount > 1_000 }
-    .order { $0.viewCount.desc() }
+let urgent = Issue.where { $0.status == "open" && $0.priority == "urgent" }
+    .order { $0.updatedAt.desc() }
     .limit(20)
 ```
 
@@ -18,15 +18,15 @@ explicitly (never `SELECT *`), every value a `$n` placeholder, never a
 literal:
 
 ```
-SELECT "id", "title", "view_count", "published", "author_id" FROM "posts" WHERE (("published" = $1) AND ("view_count" > $2)) ORDER BY "view_count" DESC LIMIT 20
+SELECT "id", "title", "status", "priority", "updated_at", "reporter_id" FROM "issues" WHERE (("status" = $1) AND ("priority" = $2)) ORDER BY "updated_at" DESC LIMIT 20
 ```
 
 ## Joins, aliases, and self-joins
 
 ```swift
-Post.join(Comment.self, on: { post, comment in comment.postID == post.id })
-    .select(into: Row.self) { post, comment in
-        (title: post.title, commenter: comment.authorName)
+Issue.join(Project.self, on: { issue, project in issue.projectID == project.id })
+    .select(into: Row.self) { issue, project in
+        (title: issue.title, project: project.name)
     }
 ```
 
@@ -44,20 +44,20 @@ renders, naming the exact fix. A third table joins on from any two-table
 join, its closure seeing all three column sets:
 
 ```swift
-Post.join(Comment.self, on: { p, c in c.postID == p.id })
-    .join(Author.self, on: { _, comment, author in comment.authorID == author.id })
+Issue.join(Project.self, on: { i, p in i.projectID == p.id })
+    .join(User.self, on: { _, issue, user in issue.reporterID == user.id })
 ```
 
 ## Aggregates and projections
 
 ```swift
-struct AuthorStats: Decodable { let authorID: UUID; let posts: Int; let views: Int }
+struct ProjectIssueCounts: Decodable { let projectID: UUID; let issueCount: Int }
 
 try await repo.all(
-    Post.groupBy { $0.authorID }
-        .having { $0.viewCount.sum() > 1_000 }
-        .select(into: AuthorStats.self) { p in
-            (p.authorID, p.id.count(), p.viewCount.sum())
+    Issue.groupBy { $0.projectID }
+        .having { $0.id.count() > 10 }
+        .select(into: ProjectIssueCounts.self) { i in
+            (i.projectID, i.id.count())
         })
 ```
 
@@ -70,8 +70,8 @@ aggregate, a narrow read, a join's combined row.
 One statement, however many rows match:
 
 ```swift
-let published = try await repo.update(Post.where { $0.published == false }) {
-    ($0.published.set(to: true), $0.reviewedAt.set(to: Date()))
+let closed = try await repo.update(Issue.where { $0.status == "open" }) {
+    ($0.status.set(to: "closed"), $0.updatedAt.set(to: Date()))
 }
 let purged = try await repo.delete(Session.where { $0.expiresAt < .now })
 ```

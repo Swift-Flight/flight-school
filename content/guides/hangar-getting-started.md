@@ -15,19 +15,20 @@ a typed insert, and a typed update.
 ```swift
 import Hangar
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
-    var authorID: UUID
-    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
+    var status: String
+    var priority: String
+    var updatedAt: Date
+    var reporterID: UUID
+    @BelongsTo(foreignKey: \Issue.reporterID) var reporter: Loadable<User>
 }
 ```
 
-`@Entity("posts")` names the table. Every plain stored property becomes a
-column automatically — `viewCount` maps to `view_count` on its own,
+`@Entity("issues")` names the table. Every plain stored property becomes a
+column automatically — `updatedAt` maps to `updated_at` on its own,
 snake_case being the default column-naming convention — and you override
 one only when a table doesn't follow it, with an explicit
 `@Column("legacy_name")`. `@ID` marks the primary key. None of this is
@@ -38,24 +39,24 @@ part possible.
 ## A query is a value
 
 ```swift
-let popular = Post.where { $0.viewCount > 1_000 }
-    .order { $0.viewCount.desc() }
+let urgent = Issue.where { $0.priority == "urgent" }
+    .order { $0.updatedAt.desc() }
     .limit(20)
 ```
 
-Nothing executes yet. `popular` is a `Query<Post, Post>` — a value you can
+Nothing executes yet. `urgent` is a `Query<Issue, Issue>` — a value you can
 pass around, store, extend, or hand to a function, and building it further
 never mutates what it was built from:
 
 ```swift
-let base = Post.where { $0.published == true }
-let recent = base.order { $0.viewCount.desc() }.limit(10)
-let mine = base.where { $0.authorID == currentUserID }   // `base` is unchanged
+let base = Issue.where { $0.status == "open" }
+let recent = base.order { $0.updatedAt.desc() }.limit(10)
+let mine = base.where { $0.reporterID == currentUserID }   // `base` is unchanged
 ```
 
-`$0.viewCount > 1_000` is not a string template — `$0` is the generated
-`Columns` value, `.viewCount` is a real property access, and `>` is a real
-operator overload building a `Predicate`. Misspell `viewCount` and the
+`$0.priority == "urgent"` is not a string template — `$0` is the generated
+`Columns` value, `.priority` is a real property access, and `==` is a real
+operator overload building a `Predicate`. Misspell `priority` and the
 build fails at that line, not at 2am when the query finally runs against
 production.
 
@@ -65,19 +66,19 @@ A query does nothing until a `Repo` runs it:
 
 ```swift
 let repo = Repo(client: postgresClient, logger: logger)
-let posts: [Post] = try await repo.all(popular)
+let issues: [Issue] = try await repo.all(urgent)
 ```
 
 `repo.one(query)` returns at most one row: `nil` for zero matches, the row
 for exactly one, and a thrown `HangarError.tooManyRows` for more than
-one. Zero is a legitimate outcome — "no post has that id" is completely
+one. Zero is a legitimate outcome — "no issue has that id" is completely
 ordinary — but two rows matching a query you expected to identify a
 single one is never legitimate, and `one` refuses to silently pick the
 first and hide that something's wrong:
 
 ```swift
-guard let post = try await repo.one(Post.where { $0.id == id }) else {
-    throw HTTPError(.notFound, "no such post")
+guard let issue = try await repo.one(Issue.where { $0.id == id }) else {
+    throw HTTPError(.notFound, "no such issue")
 }
 ```
 
@@ -87,8 +88,8 @@ Every query can show you exactly what it renders to, with no server
 involved:
 
 ```swift
-print(popular.debugSQL)
-// SELECT "id", "title", "view_count", "published", "author_id" FROM "posts" WHERE ("view_count" > $1) ORDER BY "view_count" DESC LIMIT 20
+print(urgent.debugSQL)
+// SELECT "id", "title", "status", "priority", "updated_at", "reporter_id" FROM "issues" WHERE ("priority" = $1) ORDER BY "updated_at" DESC LIMIT 20
 ```
 
 `debugSQL` never contains a bound value — `$1`, `$2` are placeholders, the

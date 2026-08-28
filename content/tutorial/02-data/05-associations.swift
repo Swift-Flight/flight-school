@@ -1,25 +1,25 @@
 import Foundation
 import Hangar
 
-@Entity("authors")
-struct Author {
+@Entity("users")
+struct User {
     @ID var id: UUID
-    var name: String
+    var displayName: String
 }
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
     var title: String
-    var authorID: UUID
+    var reporterID: UUID
 
-    @BelongsTo(foreignKey: \Post.authorID) var author: Loadable<Author>
+    @BelongsTo(foreignKey: \Issue.reporterID) var reporter: Loadable<User>
 }
 
-let post = Post(id: UUID(), title: "Hello, Hangar", authorID: UUID())
+let issue = Issue(id: UUID(), title: "Login button unresponsive", reporterID: UUID())
 
 do {
-    let name = try post.author.get().name
+    let name = try issue.reporter.get().displayName
     print(name)
 } catch {
     print(error)

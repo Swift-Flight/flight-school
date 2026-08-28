@@ -1,13 +1,13 @@
 import Foundation
 import Hangar
 
-@Entity("posts")
-struct Post {
+@Entity("issues")
+struct Issue {
     @ID var id: UUID
+    var projectID: UUID
     var title: String
-    var viewCount: Int
-    var published: Bool
+    var status: String
 }
 
-let post = Post(id: UUID(), title: "Hello, Hangar", viewCount: 0, published: false)
-print(post)
+let issue = Issue(id: UUID(), projectID: UUID(), title: "Login button unresponsive", status: "open")
+print(issue)
