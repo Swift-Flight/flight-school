@@ -18,18 +18,20 @@ import Hangar
 @Entity("posts")
 struct Post {
     @ID var id: UUID
-    @Column var title: String
-    @Column var viewCount: Int
-    @BelongsTo(\.authorID) var author: Loadable<Author>
+    var title: String
+    var viewCount: Int
+    @BelongsTo(foreignKey: \.authorID) var author: Loadable<Author>
 }
 ```
 
-`@Entity("posts")` names the table. `@Column` maps `viewCount` to
-`view_count` — snake_case is the default column-naming convention, and you
-override it per property (`@Column("legacy_name")`) when a table doesn't
-follow it. `@ID` marks the primary key. None of this is reflection: the
-macro expands at compile time into a `Columns` type carrying real, typed
-keypath-like accessors, which is what makes the next part possible.
+`@Entity("posts")` names the table. Every plain stored property becomes a
+column automatically — `viewCount` maps to `view_count` on its own,
+snake_case being the default column-naming convention — and you override
+one only when a table doesn't follow it, with an explicit
+`@Column("legacy_name")`. `@ID` marks the primary key. None of this is
+reflection: the macro expands at compile time into a `Columns` type
+carrying real, typed keypath-like accessors, which is what makes the next
+part possible.
 
 ## A query is a value
 
