@@ -1,24 +1,18 @@
 import FlightCore
 import FlightWeb
 import Foundation
-import HTTPTypes
 
-extension HTTPField.Name {
-    /// The session id every call after `/api/session` must present.
-    ///
-    /// PLAN §4 says "anonymous id (cookie)," but `Cookie`/`Set-Cookie`
-    /// support (`flight@8997a5a`, "Add cookie support") landed on `main`
-    /// *after* the `v0.8.0` tag this package actually resolves against —
-    /// checked directly (`git log v0.8.0..HEAD`), not assumed — so it isn't
-    /// reachable by a normal semver pin yet. A plain request header carries
-    /// the same session id with the same security shape: per
-    /// `SessionService`'s doc comment, knowing the id already *is* the
-    /// credential (v1 has no accounts, PLAN §1), so a cookie's extra
-    /// browser-managed persistence and HttpOnly framing don't change what's
-    /// actually being trusted, only where the browser stores it. Revisit
-    /// once flight cuts a release past `v0.8.0`.
-    static let sessionID = HTTPField.Name("X-Session-Id")!
-}
+/// The name PLAN §4's "anonymous id (cookie)" actually travels under.
+///
+/// Previously a plain `X-Session-Id` header: `Cookie`/`Set-Cookie` support
+/// (`flight@8997a5a`) landed on `main` after the `v0.8.0` tag this package
+/// resolved against at the time, so it wasn't reachable by a normal semver
+/// pin. Fixed by cutting `flight` `v0.9.0` and bumping the pin — see
+/// `CHANGELOG.md` there. A real cookie is strictly better here than the
+/// header was: `HttpOnly` (on by default) keeps the value out of reach of
+/// any injected script, whereas a header the client's own JS had to attach
+/// by hand was necessarily readable by that same JS.
+private let sessionCookieName = "fs_session"
 
 struct WriteRequest: Decodable {
     let content: String
@@ -29,23 +23,29 @@ struct WriteRequest: Decodable {
 /// that session is leased to. `/run` returns as soon as the runner call is
 /// dispatched — the actual build/run output arrives over the
 /// `session:<id>` channel the browser is expected to have already joined
-/// (see SessionChannel), never in this response body.
+/// (see SessionChannel), never in this response body. The session id
+/// itself is also returned in `/api/session`'s JSON body (not just the
+/// cookie) — the client needs it in hand to build that channel topic, and
+/// an `HttpOnly` cookie is by design unreadable from the client's own JS.
 @Controller
 struct SessionController {
     // flight:hand-registered — registered in AppModule.configure(_:); it
     // composes an actor and two value types, so it isn't itself a scanned
     // @Component.
     @Autowired var sessionService: SessionService
+    @ConfigValue("session.hardCapSeconds", default: 3600) var hardCapSeconds: Int
 
     @PostMapping("/api/session")
     func createSession(_ context: RequestContext) async -> Response {
         do {
             let sessionID = try await sessionService.getOrCreateSession(
-                existingSessionID: context.request.headers[.sessionID])
-            return try Response.json([
+                existingSessionID: context.request.cookie(sessionCookieName))
+            let response = try Response.json([
                 "sessionId": sessionID,
                 "topic": SessionService.topic(for: sessionID),
             ])
+            return response.settingCookie(
+                Cookie(name: sessionCookieName, value: sessionID, maxAge: .seconds(hardCapSeconds)))
         } catch SessionBroker.BrokerError.poolExhausted {
             return .problem(status: .serviceUnavailable, message: "every runner is busy right now — try again shortly")
         } catch {
@@ -55,7 +55,7 @@ struct SessionController {
 
     @PostMapping("/api/session/write")
     func write(_ context: RequestContext, body: WriteRequest) async -> Response {
-        guard let sessionID = context.request.headers[.sessionID] else {
+        guard let sessionID = context.request.cookie(sessionCookieName) else {
             return .problem(status: .badRequest, message: "no session — POST /api/session first")
         }
         do {
@@ -70,7 +70,7 @@ struct SessionController {
 
     @PostMapping("/api/session/run")
     func run(_ context: RequestContext) async -> Response {
-        guard let sessionID = context.request.headers[.sessionID] else {
+        guard let sessionID = context.request.cookie(sessionCookieName) else {
             return .problem(status: .badRequest, message: "no session — POST /api/session first")
         }
         do {
@@ -85,7 +85,7 @@ struct SessionController {
 
     @PostMapping("/api/session/reset")
     func reset(_ context: RequestContext) async -> Response {
-        guard let sessionID = context.request.headers[.sessionID] else {
+        guard let sessionID = context.request.cookie(sessionCookieName) else {
             return .problem(status: .badRequest, message: "no session — POST /api/session first")
         }
         do {

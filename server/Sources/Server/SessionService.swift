@@ -19,7 +19,7 @@ struct SessionService: Sendable {
     /// session id. The session id itself is the only credential a joining
     /// socket presents (see SessionChannel) — consistent with v1 having no
     /// accounts at all (PLAN §1): knowing the id is exactly as much proof
-    /// of ownership as any cookie or header it travels in.
+    /// of ownership as the `HttpOnly` cookie it travels in.
     func getOrCreateSession(existingSessionID: String?) async throws -> String {
         if let id = existingSessionID, await broker.touch(sessionID: id) != nil {
             return id

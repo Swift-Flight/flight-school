@@ -5,7 +5,7 @@ let package = Package(
     name: "server",
     platforms: [.macOS(.v15)],
     dependencies: [
-        .package(url: "https://github.com/Swift-Flight/flight.git", from: "0.8.0", traits: ["Web"]),
+        .package(url: "https://github.com/Swift-Flight/flight.git", from: "0.9.0", traits: ["Web"]),
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0")
     ],
     targets: [

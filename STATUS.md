@@ -383,21 +383,50 @@ an idle session, releases its runner lease back to the supervisor,
 pushes a `session_expired` event to a still-connected socket, and frees
 the runner for a brand new session to claim immediately after.
 
-**Two real findings from building this, not from writing it carefully:**
+**Two real findings from building this, not from writing it carefully —
+the first has since been fixed, not just worked around:**
 
-1. **PLAN §4's "anonymous id (cookie)" isn't reachable yet.**
+1. **PLAN §4's "anonymous id (cookie)" wasn't reachable at first.**
    `Cookie`/`Set-Cookie` support landed on flight's `main`
    (`8997a5a`, "Add cookie support") *after* the `v0.8.0` tag this
-   package resolves against — checked directly (`git log
+   package resolved against at the time — checked directly (`git log
    v0.8.0..HEAD` in the flight checkout, plus confirming that checkout
    had *other* uncommitted changes sitting in its working tree, which is
    exactly the "don't read a dependency's mid-edit working tree" trap
-   the tutorial-content work below already learned once). Session
-   identity travels in an `X-Session-Id` header instead — the same
-   security shape PLAN's cookie design has anyway (v1 has no accounts;
-   knowing the session id already is the credential), just held by the
-   client's own JS rather than the browser's cookie jar. Revisit once
-   flight cuts a release past `v0.8.0`.
+   the tutorial-content work below already learned once). Landed
+   temporarily on an `X-Session-Id` header instead, then actually fixed
+   rather than left as a workaround: cut `flight` `v0.9.0` at that
+   commit, which surfaced two more things worth knowing before trusting
+   a release —
+   - `FLIGHT_STRICT_WARNINGS=1 swift build --enable-all-traits` (CI's own
+     build step) had been broken on flight's `main` since **before**
+     `v0.6.0`, silently, through three tagged releases (`v0.6.0`,
+     `v0.7.0`, `v0.8.0`) that all shipped without it ever passing —
+     `DiskUploadStore.create(_:)` discarded `createFile`'s result (a
+     failure there would have left an upload recording offsets against a
+     `.bin` file that was never created) and `FileByteSource.realPath(_:)`
+     used a deprecated `String(cString:)` overload. Both fixed, the full
+     970-test suite and the lean-consumer dependency check verified
+     passing locally before tagging.
+   - A separate, uncommitted change already sitting in that checkout's
+     working tree (encoding each Channel broadcast frame once instead of
+     once per subscriber — a real perf fix, not scope creep smuggled in)
+     got swept into the same release at the user's direction, verified
+     the same way.
+   - Cutting the tag itself surfaced a **third**, pre-existing, still-open
+     gap: three *other* CI jobs (`Build on macOS`, `Build documentation`,
+     the advisory `Format` lint) have been failing independently since at
+     least `v0.8.0` — confirmed by checking that release's own CI run,
+     not assumed. None of the three touch anything this session changed;
+     none were chased further, since "fix the cookie issue" didn't scope
+     in a macOS build environment (unavailable here anyway) or flight's
+     doc-generation pipeline. Flagged, not fixed.
+   `server/Package.swift` now pins `from: "0.9.0"`, `SessionController`
+   uses real `Set-Cookie`/`request.cookie(_:)`, and the full lease →
+   write → run → reset cycle was re-verified end to end against a real
+   runner with the actual cookie flow (confirmed the response carries
+   `HttpOnly`/`SameSite=Lax`, and that write/run/reset all work reading
+   only from the cookie jar, no header).
 2. **A replicated Compose service can't be leased into.** The `runner`
    entry in `docker-compose.yml` used `deploy: replicas: 4` on one
    service — which round-robins one shared hostname across containers
