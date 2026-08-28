@@ -7,36 +7,37 @@ order: 4
 A handler that takes a body names it as a second parameter:
 
 ```swift
-struct CreatePost: Decodable {
+struct NewIssue: Decodable {
     let title: String
-    let body: String
+    let priority: String
 }
 
-@PostMapping("/posts")
-func create(_ context: RequestContext, body: CreatePost) throws -> Response {
-    // body.title, body.body — already decoded, already typed
-    return try Response.json(["title": body.title], status: .created)
+@PostMapping("/issues")
+func create(_ context: RequestContext, body: NewIssue) throws -> Response {
+    // body.title, body.priority — already decoded, already typed
+    try Response.json(["title": body.title, "priority": body.priority], status: .created)
 }
 ```
 
-That's the whole shape: `body: CreatePost` in the method signature, no
+That's the whole shape: `body: NewIssue` in the method signature, no
 `context.request.body`, no manual `JSONDecoder`. The macro generates the
 decode call for you, and it decodes based on the request's actual
 `Content-Type` — which means the same handler accepts either of these,
 unchanged:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/posts \
+curl -X POST http://127.0.0.1:8080/issues \
   -H "Content-Type: application/json" \
-  -d '{"title": "hello", "body": "world"}'
+  -d '{"title": "Login broken", "priority": "high"}'
 
-curl -X POST http://127.0.0.1:8080/posts \
+curl -X POST http://127.0.0.1:8080/issues \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "title=hello&body=world"
+  -d "title=Login+broken&priority=high"
 ```
 
-JSON and form-urlencoded both decode into the same `CreatePost`, because
-`CreatePost` is just `Decodable` — nothing about it says which wire format
+Both answer `{"priority":"high","title":"Login broken"}` — JSON and
+form-urlencoded decode into the same `NewIssue`, because `NewIssue` is
+just `Decodable` — nothing about it says which wire format
 it came from. This matters more than it looks: a plain HTML `<form
 method="post">` submits as `application/x-www-form-urlencoded`, so the
 exact same handler serves a JavaScript client posting JSON and an
@@ -52,10 +53,19 @@ whose body doesn't match your `Decodable` type, answers `400` naming what
 was wrong. Try it:
 
 ```bash
-curl -X POST http://127.0.0.1:8080/posts \
+curl -X POST http://127.0.0.1:8080/issues \
   -H "Content-Type: application/json" \
-  -d '{"title": "hello"}'   # missing `body` — a 400, not a crash
+  -d '{"title": "only"}'   # missing `priority` — a 400, not a crash
+# {"status":400,"title":"Bad Request",
+#  "detail":"Invalid request body: missing key 'priority' at top level"}
 ```
 
 Nothing in your handler catches either case — they never reach it. The
-handler body only ever runs once `body` is a real, valid `CreatePost`.
+handler body only ever runs once `body` is a real, valid `NewIssue`. The
+415 says so explicitly, naming what it would have accepted:
+
+```
+{"status":415,"title":"Unsupported Media Type",
+ "detail":"Unsupported Media Type: 'text/plain' — this route accepts
+           application/json or application/x-www-form-urlencoded"}
+```

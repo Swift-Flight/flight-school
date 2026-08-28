@@ -9,16 +9,24 @@ but a handler that needs to choose its own status code or add a header
 constructs a `Response` directly:
 
 ```swift
-@PostMapping("/posts")
-func create(_ context: RequestContext, body: CreatePost) throws -> Response {
-    try Response.json(["id": newID.uuidString], status: .created)
+struct IssueSummary: Codable, ResponseEncodable {
+    let number: Int
+    let status: String
 }
 
-@DeleteMapping("/posts/:id")
+@PostMapping("/issues")
+func create(_ context: RequestContext) throws -> Response {
+    try Response.json(IssueSummary(number: 201, status: "open"), status: .created)
+}
+
+@DeleteMapping("/issues/:number")
 func delete(_ context: RequestContext) -> Response {
     .noContent
 }
 ```
+
+`curl -i` those two and you get `201 Created` with a JSON body, and
+`204 No Content` with no body at all.
 
 `Response.json` is the same JSON encoding a `Codable` return value gets
 implicitly — this is that path, called by hand so you can pass `status:`.
@@ -33,17 +41,21 @@ A handler doesn't need to catch its own errors to answer with the right
 status code — it throws, and names the status when it does:
 
 ```swift
-@GetMapping("/posts/:id")
-func show(_ context: RequestContext) async throws -> Post {
-    guard let idText = context.pathParam("id"), let id = UUID(uuidString: idText) else {
-        throw HTTPError(.badRequest, "malformed id")
+@GetMapping("/issues/:number")
+func show(_ context: RequestContext) throws -> Response {
+    guard let text = context.pathParam("number"), let number = Int(text) else {
+        throw HTTPError(.badRequest, "issue number must be an integer")
     }
-    guard let post = try await repo.one(Post.where { $0.id == id }) else {
-        throw HTTPError(.notFound, "no such post")
+    guard number <= 200 else {
+        throw HTTPError(.notFound, "no issue #\(number)")
     }
-    return post
+    return try Response.json(IssueSummary(number: number, status: "open"))
 }
 ```
+
+(The seeded project has 200 issues, so `number <= 200` stands in for the
+database lookup this tier has no database for — Part 3 replaces it with a
+real query, and the error handling around it doesn't change.)
 
 Both throws are the whole error path — nothing downstream needs a `catch`.
 Every `HTTPError` (and anything else conforming to `HTTPErrorRepresentable`,
@@ -52,14 +64,17 @@ the wire) is caught centrally and rendered as
 [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) `application/problem+json`:
 
 ```bash
-curl -i http://127.0.0.1:8080/posts/not-a-uuid
+curl -i http://127.0.0.1:8080/issues/abc
 ```
 ```
 HTTP/1.1 400 Bad Request
 Content-Type: application/problem+json
 
-{"status":400,"title":"Bad Request","detail":"malformed id"}
+{"status":400,"title":"Bad Request","detail":"issue number must be an integer"}
 ```
+
+And `/issues/999` answers `404` with `"detail":"no issue #999"` — same
+mechanism, different status, still no `catch` anywhere in the handler.
 
 `title` is always the status's own reason phrase; `detail` is the message
 you passed. Omit the message — `throw HTTPError(.forbidden)` — and `detail`

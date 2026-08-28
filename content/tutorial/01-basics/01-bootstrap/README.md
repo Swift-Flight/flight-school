@@ -70,6 +70,32 @@ first — regardless of the order modules are listed in `Main.swift`'s
 array. You'll see this directly once Part 2 adds a database module ahead
 of your own.
 
-**Try it:** add a second `@Controller` to this project (any route you
-like) and rebuild. Nothing in `AppModule` or `Main.swift` needs to change
-for it to start serving — that's `flightRegisterAll` doing its job.
+**Try it — this is the exercise.** The editor is open on a new file,
+`Sources/App/Controllers/StatusController.swift`. Write a controller in
+it:
+
+```swift
+import FlightCore
+import FlightWeb
+
+@Controller
+struct StatusController {
+    @ConfigValue("app.name") var appName: String
+
+    @GetMapping("/status")
+    func status(_ context: RequestContext) -> String {
+        "\(appName): up"
+    }
+}
+```
+
+Press Run. `curl /status` answers `App: up` — and nothing in `AppModule`
+or `Main.swift` changed to make that happen. That's `flightRegisterAll`
+doing its job: the plugin found the new type at build time and wrote the
+registration for it.
+
+`@ConfigValue("app.name")` is a preview of the configuration exercise, but
+it's worth noticing now for a different reason: it has no `default:`, so
+the build plugin checks that `app.name` actually exists in `flight.yaml`.
+Misspell it and the build fails naming the key — a wrong config key is a
+compile error here, not a 3am page.
