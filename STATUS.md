@@ -4,14 +4,21 @@ What's actually built, verified, and running, versus what's still just in
 `PLAN.md`. Updated as milestones land — see `PLAN.md` §10 for the full
 milestone list this maps onto.
 
-## Done (M0 — content complete; confirming DocC is the last piece)
+## Done — M0 fully closed
 
 Per `PLAN.md` §10, M0 is "SvelteKit site rendering guides + tutorial
 *text* (no execution); the guides link out to DocC on GitHub Pages."
-Both halves of that are now done — every tutorial part (40 of 41
-exercises) and all 13 planned guides. What's left to call M0 entirely
-closed is confirming the just-fixed `docs.yml` run succeeds end to end,
-including the actual Pages deployment — in progress as of this writing.
+Every piece of that is now real and confirmed working: the full tutorial
+(40 of 41 exercises), all 13 guides, and — as of the third attempt,
+after two real bugs found and fixed by actually running it — a live
+DocC reference site at `https://swift-flight.github.io/flight-school/`.
+Verified past "the workflow went green": curled the live index (200,
+correct title) and a real target's page
+(`.../flight/FlightCore/documentation/flightcore/`, 200), and counted
+31 target links on the index — 18 flight + 2 hangar + 11 flight-data,
+exactly matching every target named in `docs.yml`'s three generation
+loops, so nothing silently failed to generate or got dropped from the
+index.
 
 **Site.** SvelteKit 5 (Svelte `5.56.1`, verified — not just requested),
 `adapter-node`, deployed via `docker compose up -d` (Caddy + site).
@@ -155,9 +162,9 @@ the manifest before assuming it's written.
   isn't configured (confirmed via the Pages API — no CNAME; the real
   URL is `swift-flight.github.io/flight-school/`, and the actual
   SvelteKit site has no fixed production domain yet either) — now links
-  to the GitHub repository instead of a guessed-at domain. Re-triggered
-  a third time to confirm both fixes; see the next status update for
-  the outcome.
+  to the GitHub repository instead of a guessed-at domain. **The third
+  attempt succeeded** — `build` and `deploy` both green, live site
+  confirmed serving real content (see above).
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
