@@ -4,13 +4,21 @@ What's actually built, verified, and running, versus what's still just in
 `PLAN.md`. Updated as milestones land — see `PLAN.md` §10 for the full
 milestone list this maps onto.
 
-## Done — M0's tutorial/guides half solid; DocC had a real bug this file
-## wrongly reported as fixed
+## Done — M0 fully closed, this time confirmed by real content, not status codes
 
 Per `PLAN.md` §10, M0 is "SvelteKit site rendering guides + tutorial
 *text* (no execution); the guides link out to DocC on GitHub Pages."
 The tutorial (40 of 41 exercises) and all 13 guides are real and
-confirmed working — see below, unchanged from before.
+confirmed working — see below, unchanged from before. The DocC-on-Pages
+half is now genuinely confirmed too: after the fix below, checked that
+the baked-in `baseUrl` on real deployed pages for all three repos
+(`.../flight/FlightCore/`, `.../hangar/Hangar/`,
+`.../flight-data/FlightCache/`) matches the real served path, and that
+the actual JS asset each page requests resolves with 200 — not just the
+top-level document. swift-changeset has since been added as a fourth
+repo (a user noticed it was missing — Changeset/ValidationRule/
+TableModel are taught directly in Part 2 but had no reference docs at
+all) and is queued for its own first real run.
 
 The DocC-on-Pages half was prematurely declared done here, twice, on
 the strength of a verification pass that only checked HTTP status
@@ -199,9 +207,13 @@ the manifest before assuming it's written.
   three `--hosting-base-path` values and replaced the smoke-check with
   one that extracts the real baked-in `baseUrl` and confirms a matching
   directory actually exists in the artifact — tested directly against
-  both the broken and fixed values before trusting it in CI. Re-
-  triggered; not yet re-confirmed against live rendered content (a real
-  status-code check, not a repeat of the mistake that missed this).
+  both the broken and fixed values before trusting it in CI. **Deployed
+  and confirmed for real**: curled the live pages for all three repos
+  and checked that the baked-in `baseUrl` matches the real served path,
+  and that the actual JS asset it requests resolves with 200 — the
+  thing that was actually broken, not a status code on the outer HTML
+  document. `swift-changeset` was added as a fourth repo immediately
+  after (see above) and hasn't had its own deployed run yet.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
