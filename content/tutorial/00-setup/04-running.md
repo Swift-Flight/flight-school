@@ -32,12 +32,14 @@ swift test
 ```
 
 `Tests/AppTests/HealthControllerTests.swift` exercises the same route
-without a real socket — `FlightWebTesting` gives you an in-process
-transport that speaks the same request/response types your controller
-does, so a controller test looks like calling a function, not like
-standing up a server and tearing it down. You'll see this pattern again,
-in more depth, in [Testing](/guides/testing) once there's more than one
-route to test.
+without a real socket — `FlightWebTesting`'s `TestClient` dispatches
+through the exact same `Request`/`Response` types your controller does,
+skipping the transport layer entirely rather than routing through an
+in-process stand-in for it. Routing, middleware, and dependency injection
+all still run for real; only the network is absent. A controller test
+ends up reading like calling a function, not like standing up a server and
+tearing it down. You'll see this pattern again, in more depth, in
+[Testing](/guides/testing) once there's more than one route to test.
 
 ## What this site's editor maps to
 

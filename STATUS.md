@@ -39,21 +39,59 @@ flight-cli's actual templates/README, not invented:
   swift-changeset `v0.1.0` (tagged releases, not their working trees —
   both repos had unrelated in-progress uncommitted changes while this was
   written; tagged-source reads avoided depending on either).
-- One guide: "Hangar: Getting Started."
+- Part 3 (Intermediate web), all 7 exercises: wiring Hangar's `Repo` into
+  Flight's request scope (and the connection-affinity bug that motivates
+  it), authentication via `TokenValidator`/OIDC, multipart + resumable
+  (tus 1.0) uploads, server-sent events, `@Scheduler`/fleet-wide-once
+  scheduling, the actuator's real health/dashboard split, and the three
+  real sizes of test. Verification for this part leaned on parallel
+  research agents per subsystem rather than one pass through everything —
+  each agent's findings were cross-checked before anything got written
+  from them, same bar as everywhere else in this file.
+- 7 reference guides (Routing and Controllers, Requests & Responses,
+  Configuration, Queries, Changesets, Associations & Preloading,
+  Transactions & Multi) — repackaging Part 1/Part 2 material already
+  verified while writing the tutorial, not separately re-verified.
+- "Hangar: Getting Started" — also **fixed**: it originally had the same
+  two invented-API mistakes as Hangar's README below, inherited when it
+  was written before this session's verification pass existed.
 
-**Real bugs found upstream while verifying, not fixed here** (out of
+**Real bugs found upstream while verifying, not fixed there** (out of
 scope — those repos have their own in-progress work and their docs
-aren't this repo's to edit): Hangar's committed `README.md` has a bare
-`@Column var title: String` (the macro requires a string-literal name
-whenever it's used at all — bare `@Column` is a compile error) and
-`@BelongsTo(\.authorID)` (the macro requires the `foreignKey:` label; no
-positional overload exists). `flight-data`'s `Docs/migrate.md` still
-shows an old standalone-package install path
-(`flight-server/flight-migrate`) that contradicts the current
-`flight-data` trait-based one in its own top-level `README.md`. Every
-Hangar/flight-data example in this repo's Part 2 content was checked
-against the macro/API's actual requirements directly, not copied from
-the affected passages.
+aren't this repo's to edit; this repo's own content was written against
+the verified-correct shape in every case). The count is high enough to
+name a pattern rather than treat each as a one-off: across `flight`,
+Hangar, and `flight-data`, doc comments, docc catalogues, and READMEs
+drift from the code they describe often enough that none of them should
+be trusted as a citation on their own — grep the actual declaration, the
+actual diagnostic message, or the actual route registration instead.
+Specific instances found:
+- Hangar's `README.md`: bare `@Column var title: String` (the macro
+  requires a string-literal name whenever it's used at all) and
+  `@BelongsTo(\.authorID)` (requires the `foreignKey:` label; no
+  positional overload exists).
+- `flight-data`'s `Docs/migrate.md`: an old standalone-package install
+  path (`flight-server/flight-migrate`) contradicting the current
+  trait-based one in its own top-level `README.md`.
+- `flight`'s `FlightSecurityCore.docc`: a `security: { issuer, audience }`
+  example missing the `oidc:` nesting the actual `@Settings`-bound keys
+  require (`security.oidc.issuer`, confirmed by grepping
+  `OIDCSecurityConfiguration.swift`'s literal `configuration.get(...)`
+  calls).
+- The same package's archived standalone README (pre-merge) demonstrates
+  enforcement via `registerMiddleware(...)`, which current `flight`
+  marks `@available(*, deprecated, ...)` in favor of `@Middleware` +
+  `container.pipeline { }`.
+- `flight`'s `FlightWeb.docc`: references a `.stream { }` response
+  constructor that doesn't exist in source — the real API is
+  `.serverSentEvents(_:)` / `.streaming(contentType:)`.
+- `flight`'s `FlightActuator.docc` and top-level `README.md`: both
+  describe `/actuator/info`, `/actuator/beans`, `/actuator/routes`, and
+  `/actuator/config` endpoints that were never implemented — only
+  `/actuator/health` and `/actuator` exist. `ActuatorModule.swift`'s own
+  doc comment also overstates prod behavior ("the routes are simply not
+  registered") — `/actuator/health` is registered in every environment
+  by design; only the full dashboard is dev-gated.
 
 Everything else in `PLAN.md` §7's curriculum outline exists only as a
 title + description in `site/src/lib/curriculum.ts` / `guides.ts` — the
@@ -95,12 +133,9 @@ current flat files are the final shape.
 - Everything requiring either of the above: the snippet/db/app/app+db
   execution tiers, the embedded editor, "Solve" diffing, session
   presence, the preview proxy.
-- Parts 3–4 of the curriculum (Parts 1 and 2 are written — see above), and
-  every guide except "Hangar: Getting Started" — titles and descriptions
-  exist in the manifests; the prose doesn't yet.
-- Testing content specifically (Part 3) has no proven source to adapt
-  from anywhere yet — flagged in `PLAN.md` §7a as a genuine open item,
-  not just unwritten.
+- Part 4 of the curriculum (Parts 1–3 are written — see above), and the
+  remaining guides (Testing, Channels, Presence, Deployment) — titles and
+  descriptions exist in the manifests; the prose doesn't yet.
 
 ## If you're picking this up cold
 
@@ -108,12 +143,28 @@ Read `PLAN.md` first, all of it — §7a and §8a in particular record two
 corrections made *after* the original plan was written, each from
 actually checking a claim against source rather than trusting the first
 draft. The pattern is worth continuing: before writing an exercise for
-Parts 3–4, check whether flight-cli's `TUTORIAL.md` or `demo` tier
-already covers that ground (per §7a, it covers more than the benchmark
-app does), and don't assume a config/CLI flag/API shape without grepping
-the real source first — this plan has already been wrong twice in ways
-that only source-checking caught, and Hangar's own README turned out to
-have two more (see above).
+Part 4, check whether flight-cli's `TUTORIAL.md` or `demo` tier already
+covers that ground (per §7a, it covers more than the benchmark app does),
+and don't assume a config/CLI flag/API shape without grepping the real
+source first — this plan has already been wrong twice in ways that only
+source-checking caught, and the "real bugs found upstream" list above has
+grown to seven instances since. Note that `flight-cli` itself carries no
+tags at all (`git tag --list` is empty there) — there's no release
+boundary to check its templates/`TUTORIAL.md` against the way there is
+for `flight`/Hangar/`flight-data`; treat its `main` as the only version
+that exists.
+
+Part 3's verification used parallel research agents (one per subsystem —
+uploads, SSE, scheduling, actuator, testing) rather than one sequential
+pass, since the subsystems were independent and each needed its own deep
+source dive. It worked well and is worth repeating for Part 4, which has
+even more independent-feeling ground (Channels, Presence, PubSub,
+clustering, deployment) — but an agent's findings still got cross-checked
+before anything was written from them, the same as any other source.
+One of those five findings (testing) directly corrected a claim already
+published in Part 0's `04-running.md` about what `TestClient` actually is
+— re-reading earlier content in light of later findings is still worth
+doing, not just trusting it because it already shipped.
 
 Before trusting any upstream package as a source of truth, check it's
 not mid-edit: `git status --short` in that package's own checkout, and if
