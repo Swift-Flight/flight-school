@@ -624,6 +624,49 @@ returns a model" example, unconnected to the Hangar/Changeset curriculum
 this decision was actually about — left alone; revisit only if full
 site-wide domain consistency is ever explicitly wanted.
 
+## M2 continued: the Postgres sidecar, seeded and verified
+
+`postgres/schema.sql` and `postgres/seed.sql` are literal copies of
+`benchmark/harness/{schema,seed}.sql` (not a package/submodule dependency
+— it's SQL, not versioned code; re-copy both together and re-verify
+`content/`'s debugSQL claims if the benchmark schema ever changes). A new
+`postgres` service in `docker-compose.yml` loads them via the official
+image's `docker-entrypoint-initdb.d` convention into a database named
+`flight_school_seed`, on `runner-internal` only (no `ports:`/`expose:` —
+only `server` and the runners will ever need to reach it).
+
+**Verified against a real container, not assumed from the compose
+syntax being valid**: built the exact image with the exact schema/seed
+mounts `docker-compose.yml` uses, confirmed the init scripts actually ran
+(`INSERT 0 30` / `INSERT 0 1` / `INSERT 0 200`, matching the seed's own
+claim), queried real distributions (30 users, 200 issues, 40 with a
+`NULL assignee_id` — the real nullable-FK case `05-associations` and
+`hangar-preloading.md` now teach against), and — the actual mechanism
+M2's session provisioning depends on — confirmed `CREATE DATABASE s_test1
+TEMPLATE flight_school_seed` clones instantly with all 200 rows, a
+`DELETE` inside the clone doesn't touch the template (confirmed the
+template still has its row afterward), and `DROP DATABASE` cleans up
+completely. `docker compose config` also validates the full service
+definition.
+
+**Not yet built**: the part that actually calls `CREATE`/`DROP DATABASE`
+per session. That's `server`'s job — `SessionBroker`/`SessionService`
+need a `db`-tier lease path that provisions `s_<sessionID>` on session
+start and drops it on release/reap, and the runner's supervisor needs a
+way to receive that session's connection string and make it reachable
+from the learner's own snippet (an environment variable, most likely, or
+a generated prelude file alongside `main.swift`) — neither exists yet.
+Also not yet decided: what role/credentials the runner's own connection
+to its session database uses (the shared `postgres` superuser is the
+simplest thing that works and is what's verified above; PLAN §4's
+"connection limits per session role" is real hardening worth doing before
+this is learner-facing, not a v1 blocker — `ALTER DATABASE ... CONNECTION
+LIMIT n` at creation time is the cheap first step, no separate role
+needed). `06-preloading` — the first exercise that actually needs the
+`db` tier — is the natural first target to wire once provisioning exists,
+migrated to `Issue`/`Project`/`User` as part of that work per the section
+above.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with

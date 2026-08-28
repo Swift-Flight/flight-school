@@ -103,10 +103,35 @@ services:
   runner-4:
     <<: *runner-base
 
-  # postgres:
-  #   image: postgres:16-alpine
-  #   Session template databases (M2) and, later, the server's own session
-  #   store. Not needed until there's code execution to back.
+  # The DB tier's shared server (PLAN §3/§4, M2). `flight_school_seed` is
+  # built once, at first container start, from `postgres/schema.sql` +
+  # `postgres/seed.sql` — copied verbatim from the benchmark suite (PLAN
+  # §4: "the issues/projects/users domain reused from the benchmark
+  # suite") — via the official image's `docker-entrypoint-initdb.d`
+  # convention. That convention only runs against a fresh, empty data
+  # directory: once `postgres-data` has data on it, editing either SQL
+  # file and restarting the container does nothing — a schema/seed change
+  # needs a fresh volume (`docker compose down -v` or removing just this
+  # volume) to actually take effect.
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=flight_school_seed
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-flight_school_dev}
+    volumes:
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - runner-internal
+    # No `ports:`/`expose:` beyond `runner-internal` — only `server`
+    # (session provisioning: `CREATE`/`DROP DATABASE` — not yet
+    # implemented, see STATUS.md) and the runners themselves (once a
+    # leased session is actually on the `db` tier) ever need to reach
+    # this, and both already sit on this network.
 
 networks:
   # `internal: true` gives this network no route to the outside world at
@@ -121,3 +146,4 @@ networks:
 volumes:
   caddy-data:
   caddy-config:
+  postgres-data:
