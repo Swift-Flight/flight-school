@@ -1,0 +1,11 @@
+app:
+  name: supervisor
+
+server:
+  host: 0.0.0.0
+  port: 9000
+
+# workspace.live / workspace.pristine default to /workspace and
+# /workspace-pristine in RunnerController itself — overridable per
+# deployment via FLIGHT_WORKSPACE_LIVE / FLIGHT_WORKSPACE_PRISTINE if
+# the runner image ever needs different paths.

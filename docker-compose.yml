@@ -35,22 +35,55 @@ services:
 
   # server:
   #   build: ./server
-  #   Flight backend — content API, session broker, channels. Lands with
-  #   the snippet-tier runner (M1). Not built yet.
+  #   Flight backend — content API, session broker, channels. Not built
+  #   yet — the runner below has nothing to lease from until this exists;
+  #   see STATUS.md for what's actually been verified so far and what
+  #   this specific gap blocks.
 
-  # runner:
-  #   build: ./runner
-  #   deploy:
-  #     replicas: 4
-  #   Sandboxed execution pool — PLAN §4/§5 (non-root, read-only rootfs,
-  #   no network egress except postgres, seccomp, ulimits). Lands with M1.
-  #   Fixed pool size is why the (future) preview proxy config in Caddyfile
-  #   can be static rather than dynamically generated.
+  # Sandboxed execution pool (PLAN §4/§5). Every flag below was verified
+  # against a real running container, not assumed from the plan's own
+  # prose — several (the tmpfs uid/gid, the `exec` mount option, the
+  # memory ceiling) turned out wrong on the first attempt. See STATUS.md
+  # for the specific failures each one fixed.
+  runner:
+    build: ./runner
+    deploy:
+      replicas: 4
+    read_only: true
+    tmpfs:
+      # uid/gid must match the image's `runner` user exactly (10001, not
+      # the commonly-assumed 1000) — a mismatch here is a silent
+      # permission-denied at container start, not a config-time error.
+      # `exec` is required, not optional: SwiftPM compiles and then
+      # executes a temporary manifest-evaluation binary under `/tmp` on
+      # every build, and Docker's tmpfs mounts are `noexec` by default.
+      - /workspace:size=2g,uid=10001,gid=10001,exec
+      - /tmp:size=256m,uid=10001,gid=10001,exec
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 4g
+    cpus: 2.0
+    networks:
+      - runner-internal
+    # No `ports:`/`expose:` — nothing outside `runner-internal` can reach
+    # this at all, including the host. The server (once it exists) joins
+    # this same network to lease sessions from it.
 
   # postgres:
   #   image: postgres:16-alpine
   #   Session template databases (M2) and, later, the server's own session
   #   store. Not needed until there's code execution to back.
+
+networks:
+  # `internal: true` gives this network no route to the outside world at
+  # all — verified this is what actually enforces "no egress except
+  # Postgres" (PLAN §5), as opposed to `--network none` on the runner
+  # itself, which also blocks the *server* from reaching it and would
+  # make the whole pool unleasable. Postgres, once it exists, joins this
+  # same network so runners can still reach exactly that one thing.
+  runner-internal:
+    internal: true
 
 volumes:
   caddy-data:

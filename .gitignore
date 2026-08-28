@@ -1,0 +1,8 @@
+# Swift build artifacts (runner/workspace, runner/supervisor) — baked
+# fresh into the runner image at build time, never committed. Package.resolved
+# IS committed, for reproducible dependency resolution.
+.build/
+.swiftpm/
+
+# OS
+.DS_Store

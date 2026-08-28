@@ -215,6 +215,135 @@ the manifest before assuming it's written.
   document. `swift-changeset` was added as a fourth repo immediately
   after (see above) and hasn't had its own deployed run yet.
 
+## M1, started — the runner (`server/` still doesn't exist)
+
+Per `PLAN.md` §10, M1 is "Snippet tier + Hangar/Changeset curriculum" —
+the runner pool and channel-streamed output first, since the server has
+nothing to lease from until a runner exists. That's what this section
+covers: the runner is real, built, and verified end to end, including
+under the actual hardening flags PLAN §5 calls for — not just written
+and trusted. `server/` (the Flight backend that would lease from this
+pool and expose it to the browser) is still entirely unbuilt; nothing
+here is reachable by a learner yet.
+
+**What exists**: `runner/workspace` (a plain SwiftPM package — one
+dependency, Hangar `0.2.1` — whose `exercise` executable target is the
+one file a session is ever allowed to write to,
+`Sources/exercise/main.swift`), `runner/supervisor` (a Flight app — yes,
+this project dogfoods the framework it teaches even here — exposing
+`/lease`, `/write`, `/run` (SSE-streamed build/run output), `/reset`,
+`/release`), and `runner/Dockerfile` + `runner/entrypoint.sh` packaging
+both into the sandboxed image PLAN §5 describes.
+
+**Verified, not assumed** — the full lease → write → run → reset →
+release cycle, tested against: the raw compiled supervisor binary; a
+plain `docker run` of the built image; and the fully hardened
+configuration — `--read-only`, tmpfs-mounted `/workspace` and `/tmp`,
+`no-new-privileges`, a `pids-limit`, a memory ceiling, and full network
+isolation (`--network none`) for the build itself. Real `debugSQL`
+output came back correctly through the whole stack every time
+(`SELECT "id", "total" FROM "orders" WHERE ("total" > $1)` for a
+learner-written `@Entity` snippet, to pick one).
+
+**Ten real bugs found by actually running this, not by writing it
+carefully** — every one would have been invisible to a code review, and
+each is the kind of thing "the plan already specified this" cannot
+substitute for checking:
+
+1. **`swift`'s path was hardcoded to `/usr/bin/swift`**, which doesn't
+   exist on a Swiftly-managed install (this dev machine's own toolchain
+   lives elsewhere). Fixed by resolving it through `env` instead of a
+   guessed absolute path.
+2. **The wall-clock timeout didn't actually kill anything.** A learner
+   snippet using `@Entity` + `while true {}` survived `Process.terminate()`
+   (SIGTERM) — confirmed this wasn't a Foundation bug by trying a bare
+   `kill -TERM` from the shell against the same PID, which *also* failed.
+   Whatever installs this behavior (almost certainly something in
+   Hangar's SwiftNIO dependency chain, though the exact mechanism wasn't
+   chased further — a bare Swift program with no such dependencies
+   terminated on SIGTERM immediately) doesn't matter for the fix: the
+   supervisor now escalates to SIGKILL, which cannot be caught or
+   ignored, after a short grace period. Without this, the single most
+   important safety property of the whole runner — a hung or malicious
+   snippet gets killed, not trusted to finish — silently did not hold.
+3. **A root-owned `/tmp` lock file broke every build as the runtime
+   user.** The image's workspace was originally built as root, before
+   `USER runner`; SwiftPM's lock file under `/tmp` came out root-owned,
+   and the actual runtime user got "invalid access" on every build.
+   Fixed by fixing ownership *before* building, so the same user builds
+   and runs throughout.
+4. **A `.build` baked at image-build time is unusable if the container's
+   first build after starting doesn't trust it** — verified directly:
+   the first `swift build` inside a freshly started container from an
+   image with a prebaked `.build` recompiled everything from scratch
+   (896 tasks, ~60s) instead of the ~2s incremental rebuild one changed
+   file should cost, almost certainly Docker's layer export/import
+   normalizing timestamps in a way that breaks SwiftPM's staleness
+   detection across that boundary. A *second* build, live within the
+   same running container, was correctly fast. Fixed by having the
+   supervisor run its own warm-up build at startup, before the HTTP
+   server even starts listening — paid once per container lifetime
+   (containers are recycled after many leases, not per session), never
+   by a learner's own first request.
+5. **The tmpfs mount's `uid=`/`gid=` didn't match the image's real
+   user** — guessed 1000 (the common default); the image's `useradd`
+   actually assigned 1001. Fixed by pinning an explicit, stable uid/gid
+   in the Dockerfile (10001) rather than depending on an implementation
+   detail of one base image's `useradd` defaults, so anything
+   orchestrating this container has a fixed number to depend on.
+6. **Docker's tmpfs mounts are `noexec` by default**, and SwiftPM
+   compiles and executes a temporary manifest-evaluation binary under
+   `/tmp` on every build — every build failed with "Permission denied"
+   until `exec` was added to both tmpfs mount options.
+7. **A read-only rootfs breaks SwiftPM/Clang's own caches**
+   (`~/.swiftpm`, `~/.cache/org.swift.swiftpm`,
+   `~/.cache/clang/ModuleCache`), which live under `/home/runner` by
+   default — not just the workspace. Fixed by redirecting `HOME` into
+   the already-writable workspace tmpfs rather than adding a second
+   mount.
+8. **A network-isolated runner cannot `git clone` its own dependencies**
+   — removing the (unusable, per #4) prebaked `.build` entirely and
+   relying on the runtime warm-up build to fetch Hangar/PostgresNIO/NIO
+   from the network directly contradicts "no network egress" (PLAN §5).
+   Fixed by baking dependency *source* into the image via
+   `swift package resolve` (fetches `.build/checkouts`, compiles
+   nothing — carries none of #4's path sensitivity) at image-build time,
+   so the runtime warm-up build only ever needs to *compile*, never
+   fetch.
+9. **`--pids-limit 128`** (a reasonable bound against a learner's
+   fork-bomb) **is too tight for `swift build`'s own parallelism** —
+   the warm-up build hit `posix_spawn: Resource temporarily unavailable`
+   compiling SwiftSyntax/BoringSSL. Raised to 512 for this pass; the
+   real fix (not yet done) is capping `swift build`'s own `-j` inside
+   the supervisor so resource needs stay predictable regardless of what
+   limit is configured, rather than just raising the limit until a
+   from-scratch build happens to fit.
+10. **A 2GB memory ceiling OOM-killed the warm-up build** under `--cpus
+   2.0` (less headroom than an unconstrained build gets from more
+   parallelism finishing faster). Raised to 4GB. The warm-up genuinely
+   took ~14 minutes under the full hardened resource profile — a real,
+   one-time-per-container-lifetime cost, not something a learner
+   session ever waits on, but worth knowing before assuming "read-only
+   + tmpfs + tight limits" is free.
+
+**Not yet done**: `server/` doesn't exist, so nothing here is reachable
+by a learner — this is purely the foundation the plan's own dependency
+order calls for building first. The `runner` service definition now in
+`docker-compose.yml` (an `internal: true` network, so the runner has no
+route to the outside world but stays reachable by a future `server` on
+the same network — `--network none` on the runner itself was tried
+first and rejected because it also blocks the server) has been
+validated with `docker compose config`, confirming the flags resolve as
+intended, but **not yet brought up via `docker compose up` itself** —
+everything above was verified through direct `docker build`/`docker
+run`, matching the compose config's resolved flags but not exercised
+through compose's own network/build machinery. A custom seccomp profile
+(PLAN §5 calls for "seccomp default profile," which Docker already
+applies without any extra configuration — a *tighter*, purpose-built
+profile is a real hardening step still open) and `swift build -j`
+capping (see #9) are the two concrete follow-ups worth doing before
+trusting this at real learner-facing scale.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with
