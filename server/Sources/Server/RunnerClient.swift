@@ -35,9 +35,17 @@ struct RunnerClient: Sendable {
     // would leave the actual outcome ambiguous.
     private static let runTimeout: TimeAmount = .seconds(30)
 
-    func lease(baseURL: String) async throws -> String {
+    /// `databaseURL` is only present for a `db`-tier session (PLAN §3) —
+    /// the runner stores it and hands it to every run's process
+    /// environment as `DATABASE_URL`, but never needs it itself, which is
+    /// why it travels as a header the runner just remembers rather than a
+    /// JSON body `/lease` has to parse.
+    func lease(baseURL: String, databaseURL: String? = nil) async throws -> String {
         var request = HTTPClientRequest(url: "\(baseURL)/lease")
         request.method = .POST
+        if let databaseURL {
+            request.headers.add(name: "X-Database-Url", value: databaseURL)
+        }
         let response = try await HTTPClient.shared.execute(request, timeout: Self.requestTimeout)
         guard response.status == .created else {
             throw RunnerClientError.unexpectedStatus(Int(response.status.code), "/lease")

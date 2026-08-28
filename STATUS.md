@@ -667,6 +667,104 @@ needed). `06-preloading` — the first exercise that actually needs the
 migrated to `Issue`/`Project`/`User` as part of that work per the section
 above.
 
+## M2 continued: per-session databases, real end to end, `06-preloading` wired
+
+The gap the section above left open is closed. `server` now provisions a
+real Postgres database for **every** session at creation, unconditionally
+— not just `db`-tier ones. PLAN §4 only ever says "each session gets"
+one, and once that's true there's no need for the server to track which
+exercise a session is currently on (it doesn't, today) just to decide
+whether to provision — `CREATE DATABASE ... TEMPLATE` is cheap enough
+(re-confirmed below) that always provisioning is simpler than that
+bookkeeping for a savings that was never shown to matter.
+
+**The plumbing, end to end**: `server`'s new `PostgresAdmin` (backed by a
+`PostgresNIO.PostgresClient` connected to Postgres's own always-present
+`postgres` maintenance database, never the template) does
+`CREATE DATABASE s_<sessionID> TEMPLATE flight_school_seed` in
+`SessionService.getOrCreateSession`, before the runner is even leased.
+The resulting connection string travels to the runner over a new
+`X-Database-Url` header on `/lease` (a header, not a JSON body, so
+`/lease` keeps working with no body at all for a session — which is all
+of them, now — since there's no per-database body to encode); the
+supervisor's `WorkspaceState` remembers it for the lease's whole
+lifetime, and `ProcessRunner` sets it as `DATABASE_URL` in the
+environment of the *run* step only, never the build step (the build
+needs no Postgres reachability — dependencies are already resolved into
+the image). A new, never-overwritten `Environment.swift` in the
+workspace template turns that into one line any exercise can use:
+`let repo = try await makeRepo()` — parsing the URL, starting
+`PostgresClient`'s background task, and handing back a ready `Repo`, so
+individual exercises never repeat that boilerplate. The database is
+dropped on both explicit release and idle/hard-cap reap
+(`SessionReaperService`), mirroring exactly how the runner lease itself
+is already released.
+
+**Two real bugs, both found by actually booting the server, not by
+reading the code back**:
+
+- `PostgresModule.configure(_:)`'s first draft called
+  `container.resolve(Configuration.self)` directly in the body of
+  `configure` — this traps immediately
+  (`Swift runtime failure: precondition failure`,
+  `Container.resolveAny`: "resolve() called during the registration
+  phase — resolution begins at freeze()"). `SessionBroker`'s existing
+  registration already does this correctly (resolves *inside* its
+  factory closure, which runs later, at `freeze()`); the fix was making
+  `PostgresClient`/`PostgresAdmin`'s registrations follow that same
+  shape instead of resolving eagerly.
+- Then `PostgresModule.service`'s getter hit the identical trap a second
+  way: `container.resolve(PostgresClient.self)` called directly in the
+  getter, which runs in the *same* pre-freeze pass as `configure()` —
+  confirmed directly by the crash trace pointing at
+  `_flightAssemble`'s per-module loop, before its later `freeze()` call.
+  `FlightPresenceModule`'s `PresenceService` and this app's own
+  `SessionReaperService` both already avoid this by storing the
+  `Container` and resolving lazily *inside* `run()` (called much later,
+  once the app's `ServiceGroup` actually starts services) — the fix was
+  making `PostgresClientService` follow that identical, already-proven
+  shape instead of resolving in the getter.
+
+**Verified against three real containers on one Docker network (postgres
++ one runner + server), not assumed from either fix compiling**:
+creating a session produces a real `s_<sessionid>` database, confirmed by
+listing databases directly against the container; `06-preloading`'s real
+starting snippet (`makeRepo()`, `Issue.where { $0.status == "open"
+}.preload(\.reporter).preload(\.assignee)`) built and ran for real,
+returning genuine seeded data including a correctly-nullable
+`assignee: unassigned` row; the nested-preload example from the same
+article (`Project.preload(\.issues) { $0.order {
+}.preload(\.reporter) }`) also ran for real, returning 3 ordered issues
+each with their own preloaded reporter. `DROP DATABASE IF EXISTS`
+confirmed directly via `psql` (the full reap-triggers-drop *code path*
+wasn't separately re-run live — restarting the one test runner to clear
+a stale lease from an earlier test cost another ~14-minute warm-up, and
+the reap path reuses the exact same, already-verified
+`dropSessionDatabase` method `endSession` already proved works — a
+narrower but still real gap in what got exercised, noted rather than
+quietly assumed covered).
+
+**One real bug caught in the new exercise content itself, the same way
+as always** — write it, run it for real, fix what breaks: the first
+draft of `06-preloading.swift`'s `Issue` entity forgot to declare
+`status` at all while the query filtered on it — a real compile error
+(`value of type 'Issue.Columns' has no member 'status'`), fixed by
+actually adding the field, not by reasoning that it should have compiled.
+
+**Not yet done, honestly**: `PLAN §4`'s "connection limits per session
+role" — every session's `Repo` connects as the shared `postgres`
+superuser; a real hardening step before this is learner-facing, not a
+v1 blocker (`ALTER DATABASE ... CONNECTION LIMIT n` at creation time is
+the cheap first step, no separate role needed). A server restart still
+orphans in-flight resources — previously documented for runner leases,
+now also true for session databases (hit this directly mid-session:
+restarting the server for a config change left an `s_...` database
+nothing would ever have dropped, since the fresh broker instance never
+learned that session existed; cleaned up by hand). `07-joins` onward
+still reference the old `Post`/`Comment`/`Author` domain and are still
+prose-only — `06-preloading` is the first, not the last, `db`-tier
+exercise to migrate and wire.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with
@@ -693,9 +791,17 @@ shape generalizes to it.
   directly and per-request (`site/src/lib/server/content.ts`); nothing
   has forced that to change yet.
 - "Solve" diffing, session presence, the preview proxy, and the
-  `db`/`app`/`app+db` execution tiers (PLAN §3) beyond the no-DB snippet
-  tier wired above — this is genuinely M2+, not something M1 left
-  unfinished.
+  `app`/`app+db` execution tiers (PLAN §3) — the `db` tier itself now has
+  one real wired exercise (`06-preloading`); `app`/`app+db` (a learner
+  editing files in a full Flight application, not one snippet file) are
+  a different, larger architecture problem, genuinely M3+, not something
+  left unfinished here.
+- `07-joins` through `12-diagnostics` and `03-intermediate/01-repo-wiring`
+  — real, substantive prose (not stubs) still referencing the old
+  `Post`/`Comment`/`Author` domain, and not yet wired to the `db` tier.
+  `06-preloading` is the pattern to repeat for each: migrate the domain,
+  write a real starting snippet, verify it against a real runner+server+
+  postgres before trusting it.
 - A similar accuracy pass over the *rest* of the plain-docs guides
   (`up-and-running.md`, `routing-and-controllers.md`, etc.) and the
   `db`/`app`-tier curriculum once those tiers exist — the M1-closing

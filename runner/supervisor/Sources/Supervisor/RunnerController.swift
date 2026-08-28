@@ -7,6 +7,14 @@ extension HTTPField.Name {
     /// The lease id every call after `/lease` must present — a fixed,
     /// known-valid literal, so the force-unwrap here can never fail.
     static let leaseID = HTTPField.Name("X-Lease-Id")!
+    /// This session's own Postgres connection string (PLAN §3's `db`
+    /// tier), set once at `/lease` time — absent entirely for a
+    /// `snippet`-tier session. A header, not a JSON body, so `/lease`
+    /// keeps working with no body at all for the common no-database case,
+    /// and so the connection string (which may itself contain characters
+    /// a JSON-body macro's Decodable binding would need to escape) never
+    /// needs any encoding beyond what an HTTP header value already allows.
+    static let databaseURL = HTTPField.Name("X-Database-Url")!
 }
 
 struct WriteRequest: Decodable {
@@ -37,7 +45,7 @@ struct RunnerController {
 
     @PostMapping("/lease")
     func lease(_ context: RequestContext) async -> Response {
-        guard let id = await state.lease() else {
+        guard let id = await state.lease(databaseURL: context.request.headers[.databaseURL]) else {
             return .problem(status: .conflict, message: "already leased")
         }
         return (try? Response.json(["leaseId": id], status: .created)) ?? .status(.internalServerError)
@@ -61,8 +69,9 @@ struct RunnerController {
             return .problem(status: .forbidden, message: "no valid lease")
         }
         let workspace = liveWorkspace
+        let databaseURL = await state.databaseURL
         return .serverSentEvents { events in
-            for await event in ProcessRunner.run(in: workspace) {
+            for await event in ProcessRunner.run(in: workspace, databaseURL: databaseURL) {
                 guard events.send(data: Self.encode(event), event: Self.name(event)) else { return }
             }
         }

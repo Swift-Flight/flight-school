@@ -11,15 +11,20 @@ struct SessionService: Sendable {
     let broker: SessionBroker
     let client: RunnerClient
     let broadcaster: ChannelBroadcaster
+    let postgres: PostgresAdmin
 
     static func topic(for sessionID: String) -> String { "session:\(sessionID)" }
 
     /// Reuses `existingSessionID` if it's still live; otherwise claims a
-    /// runner from the pool, leases it over HTTP, and mints a fresh
-    /// session id. The session id itself is the only credential a joining
-    /// socket presents (see SessionChannel) — consistent with v1 having no
-    /// accounts at all (PLAN §1): knowing the id is exactly as much proof
-    /// of ownership as the `HttpOnly` cookie it travels in.
+    /// runner from the pool, provisions this session's own database
+    /// (PLAN §3's `db` tier — every session gets one, see
+    /// `PostgresAdmin`'s doc comment for why that's simpler than deciding
+    /// per exercise), leases the runner over HTTP with that database's
+    /// connection string, and mints a fresh session id. The session id
+    /// itself is the only credential a joining socket presents (see
+    /// SessionChannel) — consistent with v1 having no accounts at all
+    /// (PLAN §1): knowing the id is exactly as much proof of ownership as
+    /// the `HttpOnly` cookie it travels in.
     func getOrCreateSession(existingSessionID: String?) async throws -> String {
         if let id = existingSessionID, await broker.touch(sessionID: id) != nil {
             return id
@@ -27,11 +32,21 @@ struct SessionService: Sendable {
         guard let runnerBaseURL = await broker.claimRunner() else {
             throw SessionBroker.BrokerError.poolExhausted
         }
+        let sessionID = UUID().uuidString
         do {
-            let leaseID = try await client.lease(baseURL: runnerBaseURL)
-            let sessionID = UUID().uuidString
-            await broker.attach(sessionID: sessionID, lease: .init(runnerBaseURL: runnerBaseURL, leaseID: leaseID))
-            return sessionID
+            let databaseURL = try await postgres.createSessionDatabase(sessionID: sessionID)
+            do {
+                let leaseID = try await client.lease(baseURL: runnerBaseURL, databaseURL: databaseURL)
+                await broker.attach(sessionID: sessionID, lease: .init(runnerBaseURL: runnerBaseURL, leaseID: leaseID))
+                return sessionID
+            } catch {
+                // The database exists but the runner never accepted it —
+                // drop it rather than leaking a database with nothing
+                // that will ever reap it (the broker never learned this
+                // session id, so SessionReaperService can't find it either).
+                try? await postgres.dropSessionDatabase(sessionID: sessionID)
+                throw error
+            }
         } catch {
             await broker.unclaim(runnerBaseURL)
             throw error
@@ -85,5 +100,6 @@ struct SessionService: Sendable {
     func endSession(sessionID: String) async {
         guard let lease = await broker.detach(sessionID: sessionID) else { return }
         try? await client.release(baseURL: lease.runnerBaseURL, leaseID: lease.leaseID)
+        try? await postgres.dropSessionDatabase(sessionID: sessionID)
     }
 }

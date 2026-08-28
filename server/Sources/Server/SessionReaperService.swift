@@ -22,6 +22,7 @@ struct SessionReaperService: Service, Sendable {
         let broker = try container.resolve(SessionBroker.self)
         let client = try container.resolve(RunnerClient.self)
         let broadcaster = try container.resolve(ChannelBroadcaster.self)
+        let postgres = try container.resolve(PostgresAdmin.self)
         let configuration = try container.resolve(Configuration.self)
         let interval = try configuration.getIfPresent("session.reapIntervalSeconds", as: Int.self) ?? 30
 
@@ -36,6 +37,11 @@ struct SessionReaperService: Service, Sendable {
                         try await client.release(baseURL: lease.runnerBaseURL, leaseID: lease.leaseID)
                     } catch {
                         logger.error("failed to release runner \(lease.runnerBaseURL) for reaped session \(sessionID): \(error)")
+                    }
+                    do {
+                        try await postgres.dropSessionDatabase(sessionID: sessionID)
+                    } catch {
+                        logger.error("failed to drop database for reaped session \(sessionID): \(error)")
                     }
                     await broadcaster.broadcast(
                         topic: SessionService.topic(for: sessionID), event: "session_expired")

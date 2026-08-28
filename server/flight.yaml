@@ -20,3 +20,14 @@ session:
   idleTimeoutSeconds: 600
   hardCapSeconds: 3600
   reapIntervalSeconds: 30
+
+# Session-database provisioning (PLAN §3's db tier) — matches
+# docker-compose.yml's postgres service exactly: same host (the compose
+# service name), same POSTGRES_PASSWORD default, same seeded template
+# database name.
+postgres:
+  host: postgres
+  port: 5432
+  username: postgres
+  password: flight_school_dev
+  templateDatabase: flight_school_seed

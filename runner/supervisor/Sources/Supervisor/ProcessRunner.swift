@@ -34,10 +34,10 @@ enum ProcessRunner {
     static let wallClockLimit: Duration = .seconds(15)
     static let outputByteLimit = 64 * 1024
 
-    static func run(in workspace: URL) -> AsyncStream<RunEvent> {
+    static func run(in workspace: URL, databaseURL: String?) -> AsyncStream<RunEvent> {
         AsyncStream { continuation in
             let task = Task {
-                await execute(in: workspace, continuation: continuation)
+                await execute(in: workspace, databaseURL: databaseURL, continuation: continuation)
                 continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -45,7 +45,7 @@ enum ProcessRunner {
     }
 
     private static func execute(
-        in workspace: URL, continuation: AsyncStream<RunEvent>.Continuation
+        in workspace: URL, databaseURL: String?, continuation: AsyncStream<RunEvent>.Continuation
     ) async {
         // `onLine` below is invoked from `Pipe`'s `readabilityHandler` —
         // a GCD callback, not a Swift-concurrency task — so the budget it
@@ -78,9 +78,19 @@ enum ProcessRunner {
             }
         }
 
+        // DATABASE_URL only reaches the compiled binary's own process, never
+        // `swift build` — the build step needs no Postgres reachability at
+        // all (dependencies are already resolved into the image), matching
+        // PLAN §5's "no network egress except Postgres" as tightly as
+        // possible: the one process that actually needs that egress is the
+        // one running for at most `wallClockLimit`, not the whole build.
+        var environment = ProcessInfo.processInfo.environment
+        if let databaseURL {
+            environment["DATABASE_URL"] = databaseURL
+        }
         let binary = workspace.appending(path: ".build/debug/exercise")
         let runResult = await runProcess(
-            executable: binary.path(), arguments: [], workingDirectory: workspace
+            executable: binary.path(), arguments: [], workingDirectory: workspace, environment: environment
         ) { line in
             guard budget.consume(line.utf8.count) else { return }
             continuation.yield(.runOutput(line))
@@ -106,12 +116,16 @@ enum ProcessRunner {
         executable: String,
         arguments: [String],
         workingDirectory: URL,
+        environment: [String: String]? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async -> ProcessOutcome {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.currentDirectoryURL = workingDirectory
+        if let environment {
+            process.environment = environment
+        }
 
         let pipe = Pipe()
         process.standardOutput = pipe
