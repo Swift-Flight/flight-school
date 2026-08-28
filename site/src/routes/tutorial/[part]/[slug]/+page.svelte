@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SnippetEditor from '$lib/components/SnippetEditor.svelte';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 </script>
@@ -16,6 +17,9 @@
 		<h1>{data.exercise.title}</h1>
 		{@html data.doc.html}
 	</article>
+	{#if data.snippet}
+		<SnippetEditor initialCode={data.snippet} />
+	{/if}
 {:else}
 	<div class="coming-soon">
 		<p class="eyebrow">Coming soon</p>

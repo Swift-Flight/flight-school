@@ -467,32 +467,96 @@ are disposable" posture, but a real gap, not a hidden one. Neither
 still only has `docs.yml` and `site.yml`) — everything above was verified
 by hand, the same way the runner's own hardening was.
 
+## M1 continued — the site UI is wired to the runner, for one exercise
+
+The embedded editor exists now, not just the backend it talks to.
+`site/src/lib/components/SnippetEditor.svelte` (CodeMirror 6 —
+`basicSetup` + `StreamLanguage.define(swift)` from
+`@codemirror/legacy-modes/mode/swift`, exactly the "community Swift
+legacy-mode" PLAN §4 names) mounts on any `runtime: snippet` exercise
+page that has starting content, creates/reuses a session on mount,
+joins its `session:<id>` channel, and wires Run (write → run, output
+streamed live into a pane) and Reset. `site/src/lib/client/session.ts`
+is the whole client-side protocol: three `fetch` calls plus one
+`WebSocket` join, all same-origin relative paths (`/api/...`,
+`/socket`) — Caddy proxies both to `server` in production, and a new
+`vite.config.ts` dev proxy (`SERVER_ORIGIN`, default
+`http://localhost:9100`) does the same for `npm run dev` standalone.
+
+**Wired and verified end to end for `02-data/03-predicates`** (the
+`debugSQL` exercise — PLAN's own words call this "the pedagogical
+jackpot of the snippet tier," so it was the obvious first one to prove
+the whole path with) **and `02-data/01-entities`**: real runner, real
+server, `npm run dev` with the proxy, and a Node script driving the
+exact same fetch/WebSocket calls the component makes — through the vite
+proxy on the site's own port, not directly against `server` — confirmed
+the SSR'd page carries the article and the starting snippet correctly,
+`svelte-check`/`npm run build` both pass clean, and the full
+session → write → run → channel-push loop returns the real compiler
+output and the real `debugSQL`/`print` line, live.
+
+**One real content bug caught by actually running the exercise, not by
+reading it**: `03-predicates.md`'s shown output wrapped `debugSQL`'s
+single line across three lines for readability in prose — but the
+learner's own editor, running the real snippet, prints one line, not
+three. Fixed the article to show the real (unwrapped) line and added a
+one-line callout explaining the wrap, rather than leave a first-run
+learner wondering if their output is wrong when it's actually the
+article that was formatted differently from reality.
+
+**`02-data/02-first-queries` deliberately left unwired**, not
+overlooked: its own example (`try await repo.all(query)`) needs a live
+`Repo` against Postgres to mean anything — that's the `db` tier (M2),
+not `snippet`. Wiring a snippet-tier editor to it now would mean either
+showing code that can't actually run the way it's written, or
+duplicating `03-predicates`'s `debugSQL`-only example under a different
+title. Left as prose-only until the `db` tier exists to demonstrate it
+for real, rather than force a mismatched interactive example onto it.
+
+**Not independently verified — flagged, not silently assumed working**:
+no real browser was available to test this in (no Playwright, no
+Chromium, no display) — verification here is SSR output, a production
+build, type-checking, and driving the exact network calls the component
+makes from a script standing in for a browser. CodeMirror actually
+mounting without console errors, the Run/Reset button click handlers,
+and the output pane's live-updating DOM have not been seen rendered.
+Whoever next has an actual browser available should open
+`/tutorial/02-data/03-predicates` and click Run before trusting this
+further.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with
 `README.md` + `meta.json` + `app-a/`/`app-b/` diffs against a CLI
-template. What's actually here is flatter: one `.md` file per exercise
-with frontmatter (`title`, `description`, `order`), no `app-a`/`app-b`
-yet. That's not a missed detail — M0 is text-only, no code execution, so
-there is no "starting files vs. solution files" to diff yet. The
-`app-a`/`app-b` shape becomes real starting at M1 (the snippet runner),
-where an exercise's editor needs actual starting content and a solution
-to diff against. Revisit the content layout then; don't assume the
-current flat files are the final shape.
+template. What's actually here, even now that the snippet tier is
+interactive, is flatter: one `.md` file per exercise with frontmatter
+(`title`, `description`, `order`), plus — new as of the UI wiring above —
+one sibling `.swift` file per *wired* snippet exercise holding its
+starting code (`03-predicates.md` / `03-predicates.swift`). Not
+`meta.json` + `app-a`/`app-b`: a `snippet`-tier exercise is one file with
+no project structure around it, so a `meta.json` naming an "editable
+file allowlist" and an `app-a` *directory* would be describing a project
+that doesn't exist for this tier. `app-a`/`app-b`'s real shape — a
+project-structured directory diffed against a `flight new` template —
+still doesn't exist anywhere, because nothing has reached the `app`/
+`app+db` tiers yet, where a learner actually edits files inside a
+project. Revisit when that tier is built; don't assume the sibling-file
+shape generalizes to it.
 
 ## Not started
 
 - `server/`'s *content* module (PLAN §4: serving compiled exercise/guide
   JSON from a build-time manifest) — `site` still reads `content/`
   directly and per-request (`site/src/lib/server/content.ts`); nothing
-  has forced that to change yet, and PLAN's own content-layout deviation
-  (below) means the `app-a`/`app-b` shape a real content API would serve
-  doesn't exist yet either.
-- Everything in `site/` that would actually let a learner reach the
-  runner/server work above: the embedded editor, wiring the tutorial UI
-  to `/api/session*` and the `/socket` channel, "Solve" diffing, session
-  presence, the preview proxy, and the `db`/`app`/`app+db` execution
-  tiers (PLAN §3) beyond the no-DB snippet tier verified above.
+  has forced that to change yet.
+- Starting snippets for the rest of Part 2's no-DB exercises
+  (`04-changesets` onward) — `04-changesets` specifically is blocked on
+  the runner's workspace not depending on `swift-changeset` yet
+  (`runner/workspace/Package.swift` only has Hangar), which needs its own
+  image rebuild and warm-up re-verification, not just a content change.
+- "Solve" diffing, session presence, the preview proxy, and the
+  `db`/`app`/`app+db` execution tiers (PLAN §3) beyond the no-DB snippet
+  tier wired above.
 
 ## If you're picking this up cold
 

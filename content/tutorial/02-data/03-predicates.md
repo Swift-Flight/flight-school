@@ -15,10 +15,12 @@ print(query.debugSQL)
 ```
 
 ```
-SELECT "id", "title", "view_count", "published"
-FROM "posts"
-WHERE (("published" = $1) AND ("view_count" > $2))
+SELECT "id", "title", "view_count", "published" FROM "posts" WHERE (("published" = $1) AND ("view_count" > $2))
 ```
+
+(Wrapped here for width — `debugSQL` itself renders one line, not three, which
+matters the first time you run this yourself and the output doesn't look like
+the block above: it's not broken, it's just not wrapped.)
 
 Three things worth noticing, all real properties of the renderer rather
 than incidental formatting:

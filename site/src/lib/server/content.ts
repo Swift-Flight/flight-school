@@ -112,3 +112,23 @@ export async function loadDoc(relativePath: string): Promise<RenderedDoc | null>
 		frontmatter: data
 	};
 }
+
+/**
+ * Reads a snippet exercise's starting code — a sibling `.swift` file next
+ * to the exercise's `.md` (`02-data/03-predicates.md` → `03-predicates.swift`),
+ * not `meta.json` + `app-a`/`app-b` per PLAN §6: that shape is for a
+ * learner editing *files in a project*, which only the `app`/`app+db`
+ * tiers need. A `snippet`-tier exercise is one file with no project
+ * structure around it, so one sibling file is the whole shape M1 needs —
+ * see STATUS.md's content-layout deviation note. Returns `null`, not an
+ * error, when the exercise hasn't had starting content authored yet (most
+ * of `runtime: snippet` still hasn't, as of M1) — callers render the
+ * article without the editor in that case, the same "coming soon" posture
+ * `loadDoc` already uses for missing prose.
+ */
+export async function loadSnippet(relativePath: string): Promise<string | null> {
+	const fullPath = path.join(CONTENT_ROOT, relativePath);
+	if (!fullPath.startsWith(CONTENT_ROOT)) return null;
+	if (!existsSync(fullPath)) return null;
+	return readFile(fullPath, 'utf-8');
+}
