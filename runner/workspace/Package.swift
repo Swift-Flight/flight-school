@@ -12,13 +12,15 @@ let package = Package(
     name: "exercise-workspace",
     platforms: [.macOS(.v15)],
     dependencies: [
-        .package(url: "https://github.com/Swift-Flight/hangar.git", from: "0.2.1")
+        .package(url: "https://github.com/Swift-Flight/hangar.git", from: "0.2.1"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0")
     ],
     targets: [
         .executableTarget(
             name: "exercise",
             dependencies: [
-                .product(name: "Hangar", package: "hangar")
+                .product(name: "Hangar", package: "hangar"),
+                .product(name: "Logging", package: "swift-log")
             ]
         )
     ]

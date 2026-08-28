@@ -7,6 +7,7 @@
 // PostgresClient bootstrap boilerplate in every single starting snippet.
 import Foundation
 import Hangar
+import Logging
 
 enum EnvironmentError: Error, CustomStringConvertible {
     case noDatabaseConfigured
@@ -40,5 +41,10 @@ func makeRepo() async throws -> Repo {
     // regardless, the same way the benchmark harness's own client.run()
     // task is never explicitly cancelled either.
     Task { await client.run() }
-    return Repo(client: client)
+    // A default (not nil) logger: swift-log's default level is `.info`, so
+    // this stays silent for every exercise that never touches
+    // `repo.diagnostics` — only exercise 12 turns diagnostics on, and
+    // needs a real logger already wired up for its warnings to go
+    // anywhere at all.
+    return Repo(client: client, logger: Logger(label: "exercise"))
 }

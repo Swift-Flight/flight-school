@@ -6,9 +6,10 @@ order: 8
 
 ```swift
 try await repo.transaction { tx in
-    try await tx.insert(order)
+    try await tx.insert(issue)
     try await tx.transaction { inner in
-        try await inner.insert(lineItem)     // SAVEPOINT, not a new BEGIN
+        try await inner.update(                       // SAVEPOINT, not a new BEGIN
+            Changeset(original: project).change(\.nextIssueNumber, nextNumber + 1))
     }
 }
 ```
@@ -19,7 +20,7 @@ the pool. Calling `.transaction { }` again on a `Repo` that's already
 inside one doesn't open a second transaction; Postgres doesn't nest
 `BEGIN`, so it opens a `SAVEPOINT` instead, transparently. The body throwing
 rolls back exactly that savepoint — the outer transaction, and whatever it
-already did, is unaffected.
+already did (the new issue, still uncommitted), is unaffected.
 
 ## Isolation level
 
@@ -39,19 +40,20 @@ transaction actually starts.
 
 `SERIALIZABLE` sometimes rejects a transaction outright when two run
 concurrently against overlapping rows — SQLSTATE `40001`, or `40P01` for a
-detected deadlock. Both are the isolation level working as designed, and
-the documented remedy is simply to run the whole thing again:
+detected deadlock. Both are the isolation level working as designed: two
+people claiming the same open issue at once is exactly this shape, and the
+documented remedy is simply to run the whole thing again:
 
 ```swift
-struct AccountNotFound: Error {}
+struct IssueNotFound: Error {}
 
 try await repo.transaction(
     isolation: .serializable, retryingOnSerializationFailure: 3
 ) { tx in
-    guard let account = try await tx.one(Account.where { $0.id == id }) else {
-        throw AccountNotFound()
+    guard let issue = try await tx.one(Issue.where { $0.id == issueID }) else {
+        throw IssueNotFound()
     }
-    try await tx.update(Changeset(original: account).change(\.balance, account.balance - amount))
+    try await tx.update(Changeset(original: issue).change(\.assigneeID, currentUserID))
 }
 ```
 

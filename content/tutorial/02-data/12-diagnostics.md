@@ -12,7 +12,7 @@ and neither one is on by default.
 
 ```swift
 let plan = try await repo.explain(
-    Post.where { $0.authorID == id }.order { $0.createdAt.desc() },
+    Issue.where { $0.reporterID == id }.order { $0.createdAt.desc() },
     mode: .analyze)
 print(plan)
 ```

@@ -765,6 +765,109 @@ still reference the old `Post`/`Comment`/`Author` domain and are still
 prose-only — `06-preloading` is the first, not the last, `db`-tier
 exercise to migrate and wire.
 
+## M2 closed: the remaining six `db`-tier exercises, migrated and wired
+
+`07-joins` through `12-diagnostics` are migrated to the shared
+issues/projects/users domain and wired to the `db` tier — `06-preloading`'s
+pattern (migrate, write a real starting snippet, verify against real
+runner+server+Postgres, fix what breaks) repeated six more times.
+`11-flight-data` needed no domain migration at all — its code blocks were
+already generic (`users`/`PricingService`/`Price`), not tied to the old
+`Post`/`Comment`/`Author` domain, and it stays prose-only by nature (what
+`flight-data` builds on top of Hangar, not a snippet to run).
+
+**Four real things found only by actually running the snippets, not by
+reading them back:**
+
+- **Top-level script code is `MainActor`-isolated by default under Swift
+  6.** `08-transactions.swift`'s first draft wrote `repo.transaction { tx
+  in ... tx.transaction { inner in ... } }` directly at the top level and
+  hit a real compile error on the *inner* call only: "sending value of
+  non-Sendable type '(Repo) async throws -> Project' risks causing data
+  races." `Repo.transaction`'s `body` parameter isn't `@Sendable`-typed at
+  all (confirmed by reading `Transaction.swift` directly) — it relies on
+  Swift's region-based "sending" analysis instead, which refuses to send a
+  closure that closes over top-level (implicitly main-actor-isolated)
+  state into a nonisolated async call. The fix: move the transactional
+  logic into a plain top-level `func`, not top-level executable
+  statements — a function *declaration* doesn't inherit the implicit
+  main-actor isolation that top-level *code* gets, only the code that
+  actually runs at the top level does. `12-diagnostics.swift`'s
+  `detectingRepeatedQueries { }` call needed the identical fix for the
+  identical reason (`body: () async throws -> T`, also not `@Sendable`).
+  `09-multi.swift`'s closures never hit this, because `Multi.insert`'s
+  dependent-step closures actually are declared `@Sendable` in the real
+  API — a `@Sendable`-typed closure over plain value types is fine
+  regardless of the caller's own isolation domain; it's specifically the
+  *non*-`@Sendable`, "sending"-inferred parameters that break at the top
+  level.
+- **`repo.one(query)` always applies its own internal `.limit(2)`,
+  ignoring any limit the query already carries.** `08-transactions.swift`
+  and `12-diagnostics.swift` both first tried `repo.one(Issue.where {
+  ... }.limit(1))` to grab "any one" row and both crashed at runtime with
+  `one(...) on "issues" matched more than one row` — confirmed by reading
+  `Repo.one` directly: it renders `query.limit(2)` unconditionally,
+  specifically to *detect* an ambiguous predicate rather than silently
+  picking a first row, so a caller's own `.limit` is simply overwritten.
+  `.one()` is for a predicate that's supposed to be unique (a primary key,
+  a `UNIQUE` column); "give me any one match, I don't care which" is
+  `repo.all(query.limit(1)).first`, a different call, not a smaller limit
+  on the same one. Both exercises' `.md` prose and `.swift` snippets were
+  fixed to use the right one for each case (`repo.one` stayed correct
+  everywhere the predicate is actually unique — `key == "BENCH"`, primary
+  key lookups, the `(project_id, number)` uniqueness on the just-inserted
+  issue).
+- **`makeRepo()` built its `Repo` with `logger: nil`**, which made
+  `12-diagnostics.swift`'s whole second half silently do nothing visible:
+  25 real one-row-at-a-time queries ran (confirmed by the printed output),
+  the repeated-query counter genuinely counted them, but
+  `RepeatedQueryCounter`'s warning is emitted via `logger?.warning(...)` —
+  a no-op against a `nil` logger. Fixed at the source rather than papered
+  over in one exercise: `runner/workspace/Package.swift` gained a
+  `swift-log` dependency, and `Environment.swift`'s `makeRepo()` now
+  passes `Repo(client: client, logger: Logger(label: "exercise"))`.
+  Harmless for every other exercise — swift-log's default level is
+  `.info`, so this stays silent unless something actually sets
+  `repo.diagnostics` or Hangar itself logs a warning/error — and it's what
+  makes the exercise's own point actually observable: rerunning after the
+  fix produced a real `[Hangar] hangar repeated query` line naming the
+  exact SQL, the count (25), and the fix, in the run output a learner
+  actually sees.
+- **Restarting the runner container to clear a stuck lease desyncs it
+  from the server's own bookkeeping.** Verifying six exercises in
+  sequence against one runner (the test topology's single-runner pool)
+  meant repeatedly needing a way to force a session's lease free between
+  attempts. Restarting `test-runner-1` clears its in-memory
+  `WorkspaceState` (and is fast — ~5s, since the image's `.build` is
+  already warm), but the *server* doesn't know that happened: its
+  `SessionReaperService` later tries to `/release` using the *old*
+  session's *old* lease id against a runner that's since handed out a
+  new one, and gets a 403. Confirmed directly in `test-server`'s own
+  logs (`failed to release runner ... runner returned 403 for
+  /release`) — a variant of the already-documented "server restart
+  orphans runner leases" gap, this time triggered from the runner side
+  instead. Not fixed (it's a test-harness workaround causing test-harness
+  fallout, not a product bug); the safer alternative when it matters is
+  waiting out the idle-timeout reaper instead of restarting the runner
+  underneath it.
+
+**Verified for real, one session per exercise, against the same
+three-container topology as `06-preloading`** (`postgres` + one runner +
+`server`, single-runner pool config since only one runner container
+exists in test topology): `07-joins`'s three-table join
+(`Issue.join(Project.self,...).join(User.self,...)`) returned real joined
+rows; `08-transactions`'s nested transaction/savepoint inserted a new
+issue *and* advanced `project.nextIssueNumber` inside one outer
+transaction; `09-multi`'s dependent-step `Multi` created a new project
+and a first issue whose `reporterID` depended on the just-inserted
+project's owner, in one call; `10-bulk-writes`'s insert/update/delete
+trio ran against a dedicated, self-contained project (never touching the
+shared `BENCH` seed data) and returned real row counts (3 inserted, 3
+closed, 3 purged); `12-diagnostics`'s `EXPLAIN ANALYZE` returned a real
+Postgres plan (`Seq Scan on issues ... Rows Removed by Filter: 194`) and,
+after the logger fix, its repeated-query detector fired for real on a
+genuine one-parent-at-a-time reporter lookup.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with
@@ -791,17 +894,17 @@ shape generalizes to it.
   directly and per-request (`site/src/lib/server/content.ts`); nothing
   has forced that to change yet.
 - "Solve" diffing, session presence, the preview proxy, and the
-  `app`/`app+db` execution tiers (PLAN §3) — the `db` tier itself now has
-  one real wired exercise (`06-preloading`); `app`/`app+db` (a learner
-  editing files in a full Flight application, not one snippet file) are
-  a different, larger architecture problem, genuinely M3+, not something
-  left unfinished here.
-- `07-joins` through `12-diagnostics` and `03-intermediate/01-repo-wiring`
-  — real, substantive prose (not stubs) still referencing the old
-  `Post`/`Comment`/`Author` domain, and not yet wired to the `db` tier.
-  `06-preloading` is the pattern to repeat for each: migrate the domain,
-  write a real starting snippet, verify it against a real runner+server+
-  postgres before trusting it.
+  `app`/`app+db` execution tiers (PLAN §3) — the `db` tier's own tutorial
+  content (Part 2, `01-entities` through `12-diagnostics`) is now fully
+  migrated and wired; `app`/`app+db` (a learner editing files in a full
+  Flight application, not one snippet file) are a different, larger
+  architecture problem, genuinely M3+, not something left unfinished here.
+- `03-intermediate/01-repo-wiring` — still references the old
+  `Post`/`Comment`/`Author` domain and isn't wired to the `db` tier;
+  Part 2's `06-preloading` through `12-diagnostics` migration is the
+  pattern to repeat for it: migrate the domain, write a real starting
+  snippet, verify it against a real runner+server+postgres before
+  trusting it.
 - A similar accuracy pass over the *rest* of the plain-docs guides
   (`up-and-running.md`, `routing-and-controllers.md`, etc.) and the
   `db`/`app`-tier curriculum once those tiers exist — the M1-closing

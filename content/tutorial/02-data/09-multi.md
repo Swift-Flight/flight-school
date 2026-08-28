@@ -11,24 +11,24 @@ describing the steps, built before any of them run.
 
 ```swift
 enum K {
-    static let user = MultiKey<User>("user")
-    static let profile = MultiKey<Profile>("profile")
+    static let project = MultiKey<Project>("project")
+    static let issue = MultiKey<Issue>("issue")
 }
 
 var multi = Multi()
-    .insert(K.user, userChangeset)
-    .insert(K.profile) { results in
-        profileChangeset(for: try results[K.user])
+    .insert(K.project, projectChangeset)
+    .insert(K.issue) { results in
+        welcomeIssueChangeset(for: try results[K.project])
     }
-if sendWelcome {
+if notifyOwner {
     multi = multi.run { results in
-        try await mailer.sendWelcome(to: try results[K.user])
+        try await mailer.sendProjectCreated(to: try results[K.project])
     }
 }
 
 switch try await repo.run(multi) {
 case .success(let values):
-    let user = try values[K.user]
+    let project = try values[K.project]
 case .failure(let failure):
     logger.error("step \(failure.key) failed: \(failure.error)")
 }
@@ -41,10 +41,10 @@ Three things this buys over a plain transaction closure:
   a closure — build one in a function, return it, or combine two with
   `.merging(_:)`. Nothing runs until `repo.run(multi)`.
 - **A later step reads an earlier one's result through a typed key** —
-  `results[K.user]` is a `User`, not a dictionary lookup you cast by hand.
-  `.insert(K.profile) { }`'s trailing closure exists specifically for this:
-  the changeset it returns can depend on the row `K.user`'s step just
-  inserted, in the same transaction, before either is committed.
+  `results[K.project]` is a `Project`, not a dictionary lookup you cast by
+  hand. `.insert(K.issue) { }`'s trailing closure exists specifically for
+  this: the changeset it returns can depend on the row `K.project`'s step
+  just inserted, in the same transaction, before either is committed.
 - **A failed step is a value, not a thrown error.** `repo.run(multi)`
   returns a `MultiResult`, and `.failure` names which step broke
   (`failure.key`), what it threw (`failure.error`), and every result that

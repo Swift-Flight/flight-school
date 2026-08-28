@@ -6,21 +6,22 @@ order: 7
 
 ```swift
 let rows = try await repo.all(
-    Post.join(Comment.self, on: { post, comment in comment.postID == post.id })
-        .select(into: Row.self) { post, comment in
-            (title: post.title, commenter: comment.authorName)
+    Issue.join(Project.self, on: { issue, project in issue.projectID == project.id })
+        .select(into: Row.self) { issue, project in
+            (title: issue.title, project: project.name)
         })
 ```
 
-`.join`'s closure receives both sides' typed columns — `comment.postID`,
+`.join`'s closure receives both sides' typed columns — `issue.projectID`,
 not a string, so a typo in either name is the same compile error a typo in
 a single-table `where` would be. `.leftJoin` is the identical shape for
-"every post, matched or not" instead of "only posts with a comment."
+"every issue, matched or not" instead of "only issues with a project"
+(every issue has one here, but the shape matters the moment it doesn't).
 
 ## The same table, twice
 
 A join needs its two `FROM` entries to have distinct names — obvious for
-`Post` and `Comment`, impossible by default for `Employee` joined to
+`Issue` and `Project`, impossible by default for `Employee` joined to
 `Employee`, since every column reference would be ambiguous. `.alias(_:)`
 is how you give one side (or both) a name of its own:
 
@@ -47,9 +48,9 @@ Joining again on a two-table `JoinedQuery` gives its closure all three
 column sets, in order:
 
 ```swift
-Post.join(Comment.self, on: { p, c in c.postID == p.id })
-    .join(Author.self, on: { _, comment, author in comment.authorID == author.id })
-    .select(into: Row.self) { p, c, a in (title: p.title, commenter: a.name) }
+Issue.join(Project.self, on: { i, p in i.projectID == p.id })
+    .join(User.self, on: { _, project, user in project.ownerID == user.id })
+    .select(into: Row.self) { i, p, u in (title: i.title, owner: u.displayName) }
 ```
 
 This is ordinary generics — `JoinedQuery3<A, B, C, Result>` — rather than a
