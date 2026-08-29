@@ -13,11 +13,16 @@ struct RequestTiming {
     func handle(_ context: RequestContext, next: Next) async throws -> Response {
         let started = ContinuousClock.now
         let response = try await next(context)
-        context.logger.info("\(response.status.code) in \(started.duration(to: .now))")
-        return response
+        let elapsed = started.duration(to: .now)
+        context.logger.info("\(response.status.code) in \(elapsed)")
+        return response.settingHeader(HTTPField.Name("X-Response-Time")!, "\(elapsed)")
     }
 }
 ```
+
+It both logs the timing and returns it as a header — the header is what
+you can actually see from here, since a running app's own log output
+doesn't stream into this page yet.
 
 `@Middleware` registers `RequestTiming` as an ordinary singleton component —
 `@Autowired` can resolve it, a test can construct it directly — exactly like
@@ -39,17 +44,24 @@ somewhere.
 `RequestTiming.swift`, where the type goes, and `Main.swift`, where it
 gets enrolled. Write only the first and press Run — the app builds and
 serves exactly as before, and the log stays quiet, because nothing ever
-put the layer in a pipeline. Add the `pipeline { }` block to
-`AppModule.configure` and the same request starts logging:
+put the layer in a pipeline. Add the `pipeline { }` block to `AppModule.configure`, Run again, and the
+header appears:
 
 ```
-[App] 200 in 4.2216e-05 seconds
-[App] 404 in 3.6838e-05 seconds
+HTTP/1.1 200 OK
+X-Response-Time: 0.000118622 seconds
 ```
 
-Note the second line. The layer wraps *dispatch*, not your handlers, so a
-route that matched nothing is timed too — there was no handler involved
-for it to have wrapped.
+Now ask for a route that doesn't exist:
+
+```
+HTTP/1.1 404 Not Found
+X-Response-Time: 4.667e-05 seconds
+```
+
+That second one is the point. The layer wraps *dispatch*, not your
+handlers, so a request that matched no route is timed too — there was no
+handler involved for it to have wrapped.
 
 ## Calling `next` is the whole contract
 

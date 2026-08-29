@@ -1,12 +1,14 @@
 import FlightCore
 import FlightWeb
+import HTTPTypes
 
 @Middleware
 struct RequestTiming {
     func handle(_ context: RequestContext, next: Next) async throws -> Response {
         let started = ContinuousClock.now
         let response = try await next(context)
-        context.logger.info("\(response.status.code) in \(started.duration(to: .now))")
-        return response
+        let elapsed = started.duration(to: .now)
+        context.logger.info("\(response.status.code) in \(elapsed)")
+        return response.settingHeader(HTTPField.Name("X-Response-Time")!, "\(elapsed)")
     }
 }

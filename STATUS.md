@@ -1032,24 +1032,54 @@ arrives. This is worth expecting for the rest of Part 1 too: the
 curriculum was drafted before the tiers were real, and "which tier can
 actually run this" is a question each exercise now has to answer.
 
-**Two Part 1 exercises are deliberately not wired, both for real reasons
-rather than time**:
+**Then both remaining blockers came down, and Part 1 reached 7 of 9.**
 
-- `08-middleware` needs the learner to edit *two* files — the `@Middleware`
-  type and `AppModule`'s `pipeline { }` block in `Main.swift` — because
-  the exercise's whole point is that registering the type and enrolling it
-  in a pipeline are separate, explicit steps. That needs the file-tree UI
-  deferred out of M3's pilot (`meta.json.focus` is already an array for
-  exactly this reason; nothing reads past the first entry yet).
-- `09-configuration` teaches `@Settings` and required `@ConfigValue` keys,
-  both of which need new keys in `flight.yaml` — and `flight.yaml` is
-  outside the write allowlist on purpose. It isn't an oversight to relax:
-  the file carries the host/port binding the preview proxy depends on, so
-  a learner setting `server.host: 127.0.0.1` would silently break their
-  own preview with no visible cause. The honest options are a narrower
-  allowlist that permits specific *keys* rather than the file, or an
-  exercise that only reads keys the template already ships. Neither is
-  obviously right, so neither was guessed at.
+`08-middleware` needed multi-file editing, so the editor got it: it now
+takes a list of files, each holding its own CodeMirror `EditorState` so
+switching is a swap rather than a reload (cursor, scroll and undo history
+all survive), and a Run writes every buffer. The file list stays hidden
+for single-file exercises — one entry is furniture, not navigation — so
+the five already-wired exercises are visually unchanged. The exercise
+genuinely needed it rather than merely benefiting: its point is that
+registering a `@Middleware` type and enrolling it in a `pipeline { }` are
+deliberately *separate* steps, so a one-file version would have taught the
+opposite of the lesson. `app-a` ships `Main.swift` as the template has it,
+so the learner adds the block to real surrounding code.
+
+**Running it in the container caught a content defect no compile could
+have.** The exercise as written paid off in log lines — and a learner on
+this tier cannot see them: the app's stdout goes to the `/run` SSE stream,
+which closes at `server_started` by design (see the decoupling note
+above), so `RequestTiming`'s output goes nowhere they can look. The
+exercise would have "worked" while teaching nothing observable. Fixed by
+making the effect visible on the wire instead: the layer now also returns
+`X-Response-Time`, verified through the preview proxy on both a 200 and a
+404 — which is the *better* demonstration anyway, since the 404 proves the
+layer wraps dispatch rather than handlers (a request that matched no route
+has no handler to have wrapped). The log line stays, and the prose now
+says plainly that the header is what you can see from here and why.
+
+This is worth generalizing: **any exercise whose payoff is app log output
+is currently untestable by the learner**, and the `/logs` endpoint
+sketched in M3's plan is what would change that.
+
+`09-configuration` turned out to be only half-blocked. `@ConfigValue`'s
+`default:` form needs no yaml key at all, so a controller using both forms
+runs as-is: `app.name` resolves from `flight.yaml`, two absent keys fall
+back to their defaults, and the app starts anyway — which *is* the
+difference between the two forms, shown rather than described. The better
+half is the failure: misspelling `app.name` doesn't start-then-fail, it
+fails the build, with the plugin naming the key and both fixes. That error
+is quoted verbatim in the prose now, and teaches more than `@Settings`
+would have. `@Settings` stays prose, and the prose says why — it needs
+keys in `flight.yaml`, which stays outside the write allowlist on purpose:
+that file carries the host and port the preview depends on, so a stray
+edit would break the learner's own preview with no visible cause. Part 3,
+where the project is theirs, is where they write one for real.
+
+The remaining two are blocked on things this pass didn't touch:
+`06-cookies` on an upstream release (predates M3), and `07-static-assets`
+on preview prefix-stripping.
 
 **Left for follow-up, deliberately**: the rest of Part 1 and all of Part 3
 (`app+db`, which also needs the session database wired into the app
