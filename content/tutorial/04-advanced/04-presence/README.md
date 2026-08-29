@@ -10,7 +10,7 @@ Tracking who's here is two calls, made from `join`:
 func join(_ topic: String, socket: Socket) async -> JoinResult {
     guard let principal = socket.principal else { return .reject(.unauthenticated) }
     await presence.track(topic: topic, key: principal.subject,
-                          payload: ["displayName": principal.name, "since": Self.timestamp()],
+                          payload: ["displayName": .string(principal.subject), "since": Self.timestamp()],
                           socket: socket)
     await presence.sendState(topic: topic, to: socket)
     return .ok(initialState: ["room": .string(topic)])

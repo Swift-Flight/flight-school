@@ -1,0 +1,5 @@
+{
+  "runtime": "local",
+  "template": "demo",
+  "focus": ["Sources/App/Channels/BoardPresenceChannel.swift"]
+}

@@ -12,7 +12,8 @@ now. This capstone is that app — a live issue tracker, one project per
 board, built from nothing this tutorial hasn't already covered.
 
 ```swift
-struct BoardChannel: Channel {
+// `FlightChannels.Channel`, qualified — see the note below the code
+struct BoardChannel: FlightChannels.Channel {
     let repo: Repo
     let broadcaster: ChannelBroadcaster
     let presence: any Presence
@@ -24,7 +25,7 @@ struct BoardChannel: Channel {
         else { return .reject(JoinRejection("no_such_project")) }
 
         await presence.track(topic: topic, key: principal.subject,
-                              payload: ["displayName": principal.name], socket: socket)
+                              payload: ["displayName": principal.subject], socket: socket)
         await presence.sendState(topic: topic, to: socket)
         return .ok(initialState: ["key": .string(project.key), "name": .string(project.name)])
     }
@@ -53,6 +54,22 @@ same way whichever door it came through. `join`'s authorization check, the
 two-call presence integration, and the persist-then-broadcast ordering are
 all exercises 1 through 5 of this part, applied together rather than in
 isolation.
+
+
+Two things in that first line are worth pausing on, because the capstone is
+the first exercise where they can bite at all — both come from combining
+realtime with data in one file.
+
+`Channel` has to be written `FlightChannels.Channel`. `FlightDataPostgres`
+transitively re-exports NIO, and `NIOCore` has a `Channel` of its own (a
+socket, not a topic), so a file importing both sees two and refuses to
+guess: *'Channel' is ambiguous for type lookup in this context*. Qualifying
+the one you mean is the whole fix. No earlier exercise hits this, because
+none of them import both halves.
+
+And the presence payload is `[String: String]` — plain values, not
+`JSONValue`. `principal.subject` goes in as-is; wrapping it in `.string(…)`
+is a type error rather than a nicety.
 
 ## Proving it from outside, not from inside
 

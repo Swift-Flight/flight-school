@@ -16,6 +16,8 @@ struct EchoSocketController {
 }
 
 struct EchoHandler: WebSocketUpgradeHandler {
+    let room: String
+
     func handle(upgraded connection: WebSocketConnection, context: RequestContext) async throws {
         try await connection.send("welcome")
         for await frame in connection.frames {
