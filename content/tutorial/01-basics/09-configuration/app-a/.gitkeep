@@ -1,0 +1,8 @@
+# app-a is the learner's starting diff against the `skeleton` template
+# (PLAN §6). It is empty here on purpose: this exercise's whole task is
+# creating Sources/App/Controllers/GreetingController.swift, which the
+# template doesn't ship, so there is nothing to pre-seed — the editor
+# opens empty and the file comes into existence when they press Run.
+#
+# An exercise that starts from partially-written code puts that code here,
+# at the same path it occupies in the project.

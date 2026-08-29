@@ -30,40 +30,83 @@ declared, without naming it yet. Absent from every layer, it's `false`;
 present but the wrong shape (a string where a `Bool` was expected) still
 fails at bootstrap rather than silently keeping the default.
 
+**Try both forms together.** The editor is open on a new controller:
+
+```swift
+@Controller
+struct ConfigController {
+    @ConfigValue("app.name") var appName: String
+    @ConfigValue("app.maintenanceMode", default: false) var maintenanceMode: Bool
+    @ConfigValue("app.greeting", default: "hello") var greeting: String
+
+    @GetMapping("/config")
+    func show(_ context: RequestContext) -> String {
+        "name=\(appName) maintenance=\(maintenanceMode) greeting=\(greeting)"
+    }
+}
+```
+
+```
+name=App maintenance=false greeting=hello
+```
+
+`app.name` came from `flight.yaml`. The other two aren't in any layer at
+all — they're their defaults, and the app started anyway, which is the
+entire difference between the two forms.
+
+Now break it on purpose: change `"app.name"` to `"app.nam"` and press Run.
+It doesn't start and then fail; it doesn't start at all:
+
+```
+error: @ConfigValue key 'app.nam' in ConfigController is missing from
+flight.yaml and has no default. Add the key to flight.yaml (the base
+layer — a ${VAR} placeholder is fine for env-supplied values), or
+provide default:.
+```
+
+That's the build plugin, not the runtime — a misspelled config key is a
+compile error that names the key and both ways to fix it.
+
 ## A related group: `@Settings`
 
 Several keys that belong together bind once as a typed struct instead of
 one `@ConfigValue` per field:
 
 ```swift
-@Settings("posts")
-struct PostsSettings {
+@Settings("issues")
+struct IssuesSettings {
     var pageSize: Int = 25
     var maxPageSize: Int = 100
 }
 ```
 
 ```yaml
-posts:
+issues:
   page-size: 25
   max-page-size: 100
 ```
 
-`pageSize` binds `posts.page-size` — every property name is transformed
+`pageSize` binds `issues.page-size` — every property name is transformed
 `camelCase` → `kebab-case` to build its key, matching `flight.yaml`'s own
 convention. Resolve it exactly like any other component:
 
 ```swift
 @Controller
-struct PostController {
-    @Autowired var settings: PostsSettings
+struct IssueController {
+    @Autowired var settings: IssuesSettings
 
-    @GetMapping("/posts")
+    @GetMapping("/issues")
     func index(_ context: RequestContext) -> String {
         "page size: \(settings.pageSize)"
     }
 }
 ```
+
+This half is prose rather than something to run here: `@Settings` needs
+its keys in `flight.yaml`, and that file is deliberately not editable in
+these exercises — it carries the host and port the preview pane depends
+on, so a stray edit there would break your own preview with no visible
+cause. You'll write one for real in Part 3, where the project is yours.
 
 A property with no default (no `= value`) is required, checked against
 `flight.yaml`'s base layer at compile time — the same "build error, not a
@@ -72,8 +115,8 @@ bootstrap surprise" guarantee `@ConfigValue`'s no-default form makes.
 ## The environment-variable name a key actually reads
 
 The transform is fixed and one-way: uppercase, `.` → `_`, prefixed
-`FLIGHT_`. `app.name` reads `FLIGHT_APP_NAME`; `posts.max-page-size` reads
-`FLIGHT_POSTS_MAX-PAGE-SIZE` — note the literal dash. Only dots are
+`FLIGHT_`. `app.name` reads `FLIGHT_APP_NAME`; `issues.max-page-size` reads
+`FLIGHT_ISSUES_MAX-PAGE-SIZE` — note the literal dash. Only dots are
 rewritten, so a `@Settings`-derived key with more than one word in its
 property name keeps its dash straight through into the variable name, and a
 dash is not legal in a variable name most shells can `export`. It's a real
