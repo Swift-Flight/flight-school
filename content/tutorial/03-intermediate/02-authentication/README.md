@@ -51,7 +51,8 @@ resolved fresh per request, never shared or leaked between them — so a
 
 ```swift
 @Service
-final class DocumentService {
+struct DocumentService {
+    // flight:hand-registered — FlightSecurityModule registers PrincipalHolder
     @Autowired var identity: PrincipalHolder
 
     func currentUsersDocuments() async throws -> [Document] {
@@ -60,6 +61,20 @@ final class DocumentService {
     }
 }
 ```
+
+A `struct`, not a `final class`: `@Service`'s expansion requires
+`Sendable`, and a class holding a mutable `@Autowired` property cannot be
+— the error names `Sendable` at the macro rather than at the property, so
+it reads more mysteriously than it is. Value types are the default shape
+for components across Flight for exactly this reason.
+
+The `// flight:hand-registered` comment is also load-bearing rather than
+decorative. `PrincipalHolder` comes from `FlightSecurityModule`, not from
+a `@Component` in your own target, so the build plugin can't see its
+registration and warns that resolution will fail at startup. The comment
+is how you say "I know, it's registered elsewhere" — and it's a warning
+worth keeping, since the same message means a genuine mistake whenever
+the type *isn't* registered.
 
 ## Bearer tokens are the default seam, not the only one
 

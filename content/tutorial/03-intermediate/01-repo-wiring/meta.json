@@ -1,0 +1,5 @@
+{
+  "runtime": "local",
+  "template": "basics",
+  "focus": ["Sources/App/Controllers/IssueController.swift"]
+}

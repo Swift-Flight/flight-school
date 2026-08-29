@@ -9,21 +9,24 @@ app, a controller just asks for one:
 
 ```swift
 @Controller
-struct PostController {
+struct IssueController {
     @Autowired var repo: Repo
 
-    @GetMapping("/posts/:id")
-    func show(_ context: RequestContext) async throws -> Post {
+    @GetMapping("/issues/:id")
+    func show(_ context: RequestContext) async throws -> Issue {
         guard let idText = context.pathParam("id"), let id = UUID(uuidString: idText) else {
             throw HTTPError(.badRequest, "malformed id")
         }
-        guard let post = try await repo.one(Post.where { $0.id == id }) else {
-            throw HTTPError(.notFound, "no such post")
+        guard let issue = try await repo.one(Issue.where { $0.id == id }) else {
+            throw HTTPError(.notFound, "no such issue")
         }
-        return post
+        return issue
     }
 }
 ```
+
+This is the same `Issue` you queried directly in Part 2 — the entity and
+the predicate haven't changed at all, only where the `Repo` comes from.
 
 No connection pool in sight — `flight-data`'s Postgres module registers
 `Repo` as a *scoped* component, resolved fresh per request, and every

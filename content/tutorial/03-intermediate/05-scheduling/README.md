@@ -5,6 +5,9 @@ order: 5
 ---
 
 ```swift
+import FlightScheduler
+import Foundation          // the expansion references Date — see below
+
 @Scheduler
 struct ReportJobs {
     @Autowired var reports: ReportService
@@ -20,6 +23,12 @@ struct ReportJobs {
     }
 }
 ```
+
+The `import Foundation` is not decoration: `@Scheduler`'s expansion refers
+to `Date` (a job's scheduled instant is one), so the file needs it even
+though nothing you wrote mentions it. Omit it and the error is `cannot
+find 'Foundation' in scope`, pointing into macro-expanded code rather than
+at any line you typed.
 
 `@Scheduler` marks an ordinary singleton component — `@Autowired` resolves
 its dependencies exactly like any other type. `@Scheduled` takes either a

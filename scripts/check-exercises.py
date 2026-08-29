@@ -16,7 +16,7 @@ Two tiers, two shapes:
   Ones that call `makeRepo()` need a database; with `DATABASE_URL` set they
   are *run*, not merely built, because "it compiles" says nothing about
   whether the query was right.
-* **app** — `content/tutorial/01-basics/<slug>/` holds `meta.json` plus
+* **app** — `content/tutorial/<part>/<slug>/` holds `meta.json` plus
   `app-a`/`app-b` diffs against a named `flight new` template (PLAN §6).
   `app-b` is the solution and must build. `app-a` is the starting state and
   is deliberately allowed not to — it is frequently an empty file.
@@ -42,7 +42,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SNIPPET_DIR = REPO / "content" / "tutorial" / "02-data"
-APP_DIR = REPO / "content" / "tutorial" / "01-basics"
+TUTORIAL_DIR = REPO / "content" / "tutorial"
 SNIPPET_WORKSPACE = REPO / "runner" / "workspace"
 
 # Exit non-zero on the first failure would hide how much else is broken;
@@ -119,7 +119,7 @@ def check_snippets(database_url: str | None) -> None:
 
 
 def check_app_exercises(templates: Path) -> None:
-    exercises = sorted(p.parent for p in APP_DIR.glob("*/meta.json"))
+    exercises = sorted(p.parent for p in TUTORIAL_DIR.glob("*/*/meta.json"))
     if not exercises:
         print("no app-tier exercises found")
         return
@@ -156,8 +156,10 @@ def check_app_exercises(templates: Path) -> None:
                 shutil.copytree(solution, work, dirs_exist_ok=True)
 
                 built = run(["swift", "build"], cwd=work)
-                report(f"{exercise.name} (app-b builds)",
-                       built.returncode == 0, built.stdout)
+                # Named by part too: several parts now use the same slug
+                # numbering, so "01-..." alone would be ambiguous.
+                label = f"{exercise.parent.name}/{exercise.name}"
+                report(f"{label} (app-b builds)", built.returncode == 0, built.stdout)
 
 
 def main() -> int:
