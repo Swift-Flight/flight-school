@@ -133,13 +133,19 @@ export async function loadSnippet(relativePath: string): Promise<string | null> 
 	return readFile(fullPath, 'utf-8');
 }
 
-export interface AppExercise {
-	doc: RenderedDoc;
-	/** Relative path, inside the project, of the file the editor opens. */
-	focus: string;
-	/** `app-a`'s content for `focus` — empty when the learner starts from
+export interface AppExerciseFile {
+	/** Path inside the project, e.g. `Sources/App/Main.swift`. */
+	path: string;
+	/** `app-a`'s content for this path — empty when the learner starts from
 	 *  a blank file, which is not the same as the exercise being unwritten. */
 	initialCode: string;
+}
+
+export interface AppExercise {
+	doc: RenderedDoc;
+	/** Every file the learner edits, in `meta.json` order. The first is the
+	 *  one the editor opens on. */
+	files: AppExerciseFile[];
 	template: string;
 }
 
@@ -149,11 +155,11 @@ export interface AppExercise {
  * `flight-cli` template, rather than the snippet tier's flatter
  * one-markdown-plus-one-sibling-file layout (see `loadSnippet`).
  *
- * Only `focus[0]` is read today. `meta.json` already carries `focus` as an
- * array because the format shouldn't have to change to describe a
- * multi-file exercise — but no exercise needs one yet, and the editor has
- * no file tree to show one in, so reading the rest would be building for a
- * caller that doesn't exist.
+ * Every path in `focus` is read, in order; the first is the one the editor
+ * opens on. An exercise with more than one is what the editor's file list
+ * exists for — `08-middleware` is the case that needed it, since
+ * registering a `@Middleware` type and enrolling it in a pipeline are
+ * deliberately separate steps in two different files.
  *
  * `app-b` (the solution) is deliberately not read here: nothing serves it
  * yet. Solve-diff UX is PLAN §10's M5.
@@ -172,17 +178,20 @@ export async function loadAppExercise(relativeDir: string): Promise<AppExercise 
 	} catch {
 		return null;
 	}
-	const focus = meta.focus?.[0];
-	if (!focus) return null;
+	if (!meta.focus?.length) return null;
 
-	// Absent app-a file means "start from empty", which is a real and
-	// common case (this exercise's own task is creating the file), not a
-	// missing-content case — unlike an absent meta.json or README above.
-	const startingPath = path.join(fullPath, 'app-a', focus);
-	const initialCode =
-		startingPath.startsWith(fullPath) && existsSync(startingPath)
-			? await readFile(startingPath, 'utf-8')
-			: '';
+	const files: AppExerciseFile[] = [];
+	for (const focus of meta.focus) {
+		// Absent app-a file means "start from empty", which is a real and
+		// common case (an exercise whose task is creating the file), not a
+		// missing-content case — unlike an absent meta.json or README above.
+		const startingPath = path.join(fullPath, 'app-a', focus);
+		const initialCode =
+			startingPath.startsWith(fullPath) && existsSync(startingPath)
+				? await readFile(startingPath, 'utf-8')
+				: '';
+		files.push({ path: focus, initialCode });
+	}
 
-	return { doc, focus, initialCode, template: meta.template ?? 'skeleton' };
+	return { doc, files, template: meta.template ?? 'skeleton' };
 }

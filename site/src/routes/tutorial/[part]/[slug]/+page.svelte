@@ -21,7 +21,7 @@
 	{#if data.snippet}
 		<SnippetEditor initialCode={data.snippet} />
 	{:else if data.appExercise}
-		<AppEditor initialCode={data.appExercise.initialCode} focus={data.appExercise.focus} />
+		<AppEditor files={data.appExercise.files} />
 	{/if}
 {:else}
 	<div class="coming-soon">

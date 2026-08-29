@@ -11,8 +11,11 @@
 	// serving. Tabs rather than a stacked output pane, because a preview
 	// needs real height.
 	//
-	// One file, no file tree: no exercise yet has more than one focus
-	// path, and a tree with a single leaf is furniture, not navigation.
+	// A file list, shown only when an exercise actually has more than one
+	// file — a list with a single entry is furniture, not navigation. Each
+	// file keeps its own CodeMirror EditorState, so switching between them
+	// preserves cursor, scroll and undo history rather than reloading text
+	// into one shared editor.
 	import { onDestroy, onMount } from 'svelte';
 	import { EditorView, basicSetup } from 'codemirror';
 	import { EditorState } from '@codemirror/state';
@@ -20,10 +23,18 @@
 	import { swift } from '@codemirror/legacy-modes/mode/swift';
 	import { createSession, joinChannel, resetSnippet, runSnippet, writeFiles } from '$lib/client/session';
 
-	let { initialCode, focus }: { initialCode: string; focus: string } = $props();
+	interface ExerciseFile {
+		path: string;
+		initialCode: string;
+	}
+	let { files }: { files: ExerciseFile[] } = $props();
 
 	let editorHost: HTMLDivElement;
 	let view: EditorView | undefined;
+	let activeFile = $state(0);
+	// One saved EditorState per file, so switching tabs is a swap rather
+	// than a reload. Written back on every switch; read on the way in.
+	let fileStates: (EditorState | undefined)[] = [];
 	let outputLines = $state<{ kind: string; text: string }[]>([]);
 	let status = $state<'connecting' | 'idle' | 'saving' | 'building' | 'serving' | 'error'>(
 		'connecting'
@@ -101,14 +112,39 @@
 		}
 	}
 
-	onMount(() => {
-		view = new EditorView({
-			state: EditorState.create({
-				doc: initialCode,
+	function stateFor(index: number): EditorState {
+		return (
+			fileStates[index] ??
+			EditorState.create({
+				doc: files[index].initialCode,
 				extensions: [basicSetup, StreamLanguage.define(swift)]
-			}),
-			parent: editorHost
+			})
+		);
+	}
+
+	/** Saves the current buffer's full state before swapping the next one
+	 *  in, so switching files is lossless in both directions. */
+	function openFile(index: number) {
+		if (!view || index === activeFile) return;
+		fileStates[activeFile] = view.state;
+		activeFile = index;
+		view.setState(stateFor(index));
+	}
+
+	/** Every file's current text, keyed by path — what a Run writes. Reads
+	 *  the live view for the open file and the saved state for the rest. */
+	function currentFiles(): Record<string, string> {
+		const out: Record<string, string> = {};
+		files.forEach((file, index) => {
+			const doc =
+				index === activeFile ? view?.state.doc : (fileStates[index]?.doc ?? undefined);
+			out[file.path] = doc ? doc.toString() : file.initialCode;
 		});
+		return out;
+	}
+
+	onMount(() => {
+		view = new EditorView({ state: stateFor(0), parent: editorHost });
 
 		(async () => {
 			try {
@@ -136,7 +172,7 @@
 		status = 'saving';
 		tab = 'output';
 		try {
-			await writeFiles({ [focus]: view.state.doc.toString() });
+			await writeFiles(currentFiles());
 			await runSnippet();
 		} catch (error) {
 			status = 'error';
@@ -148,9 +184,12 @@
 		if (!view) return;
 		try {
 			await resetSnippet();
-			view.dispatch({
-				changes: { from: 0, to: view.state.doc.length, insert: initialCode }
-			});
+			// Drop every saved buffer, not just the visible one — reset means
+			// the whole editable surface goes back, matching what the runner
+			// just did on disk.
+			fileStates = [];
+			activeFile = 0;
+			view.setState(stateFor(0));
 			outputLines = [];
 			statusMessage = '';
 			serverLive = false;
@@ -197,7 +236,21 @@
 		</span>
 	</div>
 
-	<div class="filename">{focus}</div>
+	{#if files.length > 1}
+		<div class="files" role="tablist" aria-label="Files in this exercise">
+			{#each files as file, index}
+				<button
+					role="tab"
+					aria-selected={index === activeFile}
+					class:active={index === activeFile}
+					onclick={() => openFile(index)}
+				>
+					{file.path.split('/').pop()}
+				</button>
+			{/each}
+		</div>
+	{/if}
+	<div class="filename">{files[activeFile].path}</div>
 
 	<!-- Kept mounted rather than re-created per tab: CodeMirror owns its
 	     own DOM, and tearing it down on every tab switch would lose the
@@ -293,6 +346,29 @@
 	}
 	.status-error {
 		color: #d33;
+	}
+	.files {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px;
+		padding: 6px 10px 0;
+		border-bottom: 1px solid var(--line);
+	}
+	.files button {
+		border: 1px solid transparent;
+		border-bottom: none;
+		background: transparent;
+		color: var(--muted);
+		border-radius: 6px 6px 0 0;
+		padding: 4px 12px;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
+	.files button.active {
+		background: var(--bg);
+		color: var(--ink);
+		border-color: var(--line);
 	}
 	.filename {
 		padding: 6px 14px;

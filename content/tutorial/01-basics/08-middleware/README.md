@@ -35,6 +35,22 @@ simply never runs, which is a one-line fix to notice and make, not a
 silently wrong answer shipping because a registration call was forgotten
 somewhere.
 
+**This is why the exercise has two files.** The editor above lists both:
+`RequestTiming.swift`, where the type goes, and `Main.swift`, where it
+gets enrolled. Write only the first and press Run — the app builds and
+serves exactly as before, and the log stays quiet, because nothing ever
+put the layer in a pipeline. Add the `pipeline { }` block to
+`AppModule.configure` and the same request starts logging:
+
+```
+[App] 200 in 4.2216e-05 seconds
+[App] 404 in 3.6838e-05 seconds
+```
+
+Note the second line. The layer wraps *dispatch*, not your handlers, so a
+route that matched nothing is timed too — there was no handler involved
+for it to have wrapped.
+
 ## Calling `next` is the whole contract
 
 `Next` is `@Sendable (RequestContext) async throws -> Response` — a plain
