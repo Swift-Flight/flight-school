@@ -155,7 +155,13 @@ def check_app_exercises(templates: Path) -> None:
                 # learner's edits would land on their own project.
                 shutil.copytree(solution, work, dirs_exist_ok=True)
 
-                built = run(["swift", "build"], cwd=work)
+                # An exercise whose solution lives in Tests/ needs the test
+                # target compiled — plain `swift build` skips it entirely,
+                # so the whole file would go unchecked while still reporting
+                # a pass.
+                touches_tests = (solution / "Tests").is_dir()
+                command = ["swift", "build"] + (["--build-tests"] if touches_tests else [])
+                built = run(command, cwd=work)
                 # Named by part too: several parts now use the same slug
                 # numbering, so "01-..." alone would be ambiguous.
                 label = f"{exercise.parent.name}/{exercise.name}"
