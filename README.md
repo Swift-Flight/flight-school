@@ -58,6 +58,28 @@ The runner image is the expensive one (it warms a full SwiftPM build cache
 per execution tier — roughly 25 minutes cold), so rebuild `site` on its
 own when that's all that changed.
 
+### Reach it on port 80, not the site's own port
+
+`/api/*` and `/socket` are not SvelteKit routes — they belong to the
+Flight backend in `server/`, and Caddy is what puts the two behind a
+single origin. Open `http://localhost/`. Hitting the site container's own
+port instead gets you perfectly working *pages* and a failure on every API
+call, which reads as a broken endpoint rather than a wrong port; those
+paths now answer `421 Misdirected Request` explaining as much, instead of
+a bare 404.
+
+`npm run dev` has no such problem — vite's dev proxy forwards `/api` and
+`/socket` for exactly this reason.
+
+### Testing the API by hand
+
+Send a body, even an empty one: `curl -X POST -d '' http://localhost/api/session`.
+A `curl -X POST` with no `-d` at all sends neither `Content-Length` nor a
+body, and Caddy holds that request open rather than forwarding it — the
+call appears to hang. The backend itself answers such a request fine when
+reached directly, and browsers always set `Content-Length`, so this is a
+hand-testing trap rather than something clients hit.
+
 ## Contributing content
 
 Every markdown file under `content/` needs frontmatter (`title`,

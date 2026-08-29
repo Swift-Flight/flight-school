@@ -40,6 +40,8 @@ services:
       - ./content:/content:ro
     expose:
       - '3000'
+    ports:
+      - '3000:3000'
 
   # The sessions/execution half of the Flight backend (PLAN §4) — leases a
   # runner per session and streams its build/run output over Channels. The

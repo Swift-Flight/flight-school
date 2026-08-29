@@ -1074,7 +1074,30 @@ a correct-looking page, and a completely false claim: exactly the failure
 class this file already has a hard rule about, arriving from a new
 direction.
 
-Three fixes, because the documentation alone would not have been enough:
+**And the sibling trap, found the same way**: `/api/session?tier=app`
+returning 404. Not a routing bug — the site container's own port was being
+used directly instead of Caddy's. `/api/*` and `/socket` are not SvelteKit
+routes at all; they belong to `server/`, and Caddy is the only thing that
+puts the two behind one origin. What makes it genuinely confusing rather
+than merely wrong is that *pages render perfectly* on that port, so the
+symptom looks like a broken endpoint rather than a wrong address. A
+catch-all `src/routes/api/[...path]/+server.ts` now answers `421
+Misdirected Request` naming the cause and the fix. It deliberately does
+not proxy: the site has no business knowing the backend's address, and
+inventing one there would give the app two ways to reach it that could
+disagree.
+
+One more hand-testing trap, documented rather than fixed because the fix
+isn't ours to make: `curl -X POST` with no `-d` sends neither
+`Content-Length` nor a body, and **Caddy holds that request open** rather
+than forwarding it, so the call appears to hang. Verified the backend
+answers the identical request immediately when reached directly, so this
+is Caddy's behaviour, not Flight's — and browsers always set
+`Content-Length`, so no client hits it. `curl -X POST -d ''` is the
+workaround, now in the README.
+
+Three fixes for the stale-image trap, because the documentation alone
+would not have been enough:
 `README.md` said "no rebuild needed" (true of content, misleading about
 code) and now says to pass `--build`, names the symptom, and notes that
 `site` can be rebuilt alone since the runner image costs ~25 minutes. The
