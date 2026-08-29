@@ -23,6 +23,19 @@
 	{:else if data.appExercise}
 		<AppEditor files={data.appExercise.files} />
 	{/if}
+{:else if data.sourceExists}
+	<div class="coming-soon">
+		<p class="eyebrow">Content present, but unreadable by this build</p>
+		<h1>{data.exercise.title}</h1>
+		<p class="desc">{data.exercise.description}</p>
+		<p class="note">
+			This exercise exists in <code>content/</code>, but this build of the
+			site doesn't know how to read its layout. That usually means a stale
+			image: <code>content/</code> is bind-mounted live while the site's own
+			code is baked in, so the two can drift apart. Rebuild with
+			<code>docker compose up -d --build site</code>.
+		</p>
+	</div>
 {:else}
 	<div class="coming-soon">
 		<p class="eyebrow">Coming soon</p>

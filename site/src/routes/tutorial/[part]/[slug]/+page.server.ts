@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { adjacentExercises, findExercise } from '$lib/curriculum';
-import { loadAppExercise, loadDoc, loadSnippet } from '$lib/server/content';
+import { exerciseSourceExists, loadAppExercise, loadDoc, loadSnippet } from '$lib/server/content';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -29,5 +29,8 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const doc = appExercise?.doc ?? (await loadDoc(`tutorial/${params.part}/${params.slug}.md`));
 	const { prev, next } = adjacentExercises(params.part, params.slug);
-	return { ...found, doc, snippet, appExercise, prev, next };
+	// Content on disk that we failed to render is a different problem from
+	// content nobody has written — see `exerciseSourceExists`.
+	const sourceExists = doc ? false : exerciseSourceExists(params.part, params.slug);
+	return { ...found, doc, snippet, appExercise, sourceExists, prev, next };
 };

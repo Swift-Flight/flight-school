@@ -1063,6 +1063,31 @@ This is worth generalizing: **any exercise whose payoff is app log output
 is currently untestable by the learner**, and the `/logs` endpoint
 sketched in M3's plan is what would change that.
 
+**A stale site image silently claimed every new exercise was unwritten.**
+Reported from actually trying to use the thing, which is the only way it
+would have surfaced: `docker compose up -d` reuses an existing
+`flight-school-site` image, and one built before M3 has no
+`loadAppExercise` in it. It still reads the bind-mounted `content/`
+perfectly well — it just doesn't understand the directory shape, so every
+converted exercise fell through to the "coming soon" placeholder. A 200,
+a correct-looking page, and a completely false claim: exactly the failure
+class this file already has a hard rule about, arriving from a new
+direction.
+
+Three fixes, because the documentation alone would not have been enough:
+`README.md` said "no rebuild needed" (true of content, misleading about
+code) and now says to pass `--build`, names the symptom, and notes that
+`site` can be rebuilt alone since the runner image costs ~25 minutes. The
+placeholder itself now distinguishes the two cases — a new
+`exerciseSourceExists` check is deliberately shape-*agnostic*, asking only
+"is there something on disk here?", so it will keep catching this for
+content shapes that don't exist yet; when content is present but
+unrenderable the page says so and names the rebuild command. Verified both
+branches against the real compose stack: an unreadable shape reports
+itself, and genuinely-unwritten content (`06-cookies`) still reads
+"coming soon". The README was also stale in claiming `server/` and
+`runner/` don't exist.
+
 `09-configuration` turned out to be only half-blocked. `@ConfigValue`'s
 `default:` form needs no yaml key at all, so a controller using both forms
 runs as-is: `app.name` resolves from `flight.yaml`, two absent keys fall

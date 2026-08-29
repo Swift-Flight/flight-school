@@ -19,8 +19,9 @@ scripts/    Content integrity checks, the DocC → Pages index generator
 ```
 
 `server/` (a Flight backend for the interactive execution tiers) and
-`runner/` (the sandboxed code-execution pool) don't exist yet — see
-`STATUS.md` for what M0 covers and what M1+ adds.
+`runner/` (the sandboxed code-execution pool) are both real — see
+`STATUS.md` for what's actually been verified end to end and what's still
+open.
 
 ## Running locally
 
@@ -33,12 +34,29 @@ npm run dev
 Or the full deployment shape:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Content lives in `content/` and is bind-mounted into the site container,
-not baked into the image — editing a guide or exercise takes effect on the
-next request, no rebuild needed.
+**Pass `--build`.** Content lives in `content/` and is bind-mounted into
+the site container, so editing a guide or exercise takes effect on the
+next request with no rebuild. The site's own *code* is baked into the
+image, and the two drift apart the moment a change touches both — which is
+exactly what adding a new content shape does.
+
+The failure mode is quiet rather than loud, so it's worth recognising: a
+stale image can't read newer content, the loaders return nothing, and
+every affected page renders a placeholder. Since M3 that placeholder says
+so explicitly ("content present, but unreadable by this build") rather
+than claiming the exercise is unwritten, but the fix is the same either
+way — rebuild:
+
+```bash
+docker compose up -d --build site
+```
+
+The runner image is the expensive one (it warms a full SwiftPM build cache
+per execution tier — roughly 25 minutes cold), so rebuild `site` on its
+own when that's all that changed.
 
 ## Contributing content
 

@@ -195,3 +195,23 @@ export async function loadAppExercise(relativeDir: string): Promise<AppExercise 
 
 	return { doc, files, template: meta.template ?? 'skeleton' };
 }
+
+/**
+ * Whether *some* source exists for an exercise slug — either the flat
+ * `<slug>.md` or the directory form `<slug>/` (PLAN §6).
+ *
+ * Deliberately shape-agnostic: it answers "is there content here at all?"
+ * without knowing how to read it. That's the point. The site's own code is
+ * baked into its image while `content/` is bind-mounted live, so the two
+ * can disagree — a running build can be too old to understand a shape the
+ * content already uses. When that happens the loaders return `null` and
+ * the page would otherwise render the same "coming soon" placeholder it
+ * shows for genuinely unwritten content, which is indistinguishable from
+ * the real thing and sends you looking in the wrong place. This lets the
+ * page say "the content is there, this build can't read it" instead.
+ */
+export function exerciseSourceExists(part: string, slug: string): boolean {
+	const base = path.join(CONTENT_ROOT, 'tutorial', part, slug);
+	if (!base.startsWith(CONTENT_ROOT)) return false;
+	return existsSync(`${base}.md`) || existsSync(base);
+}
