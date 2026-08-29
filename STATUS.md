@@ -964,6 +964,61 @@ Parts 1, 3 and 4 finish as prose plus a project the learner runs locally —
 which PLAN §1 already named as the degraded mode, and which turns out to
 be the right *primary* mode for anything bigger than a snippet.
 
+## Parts 3 and 4 verified — five more bugs in published prose
+
+Every exercise in Parts 3 and 4 that carries user-written Swift now has an
+`app-b` compiled against the real `flight-cli` template, so CI covers it.
+This was the largest remaining risk: 16 exercises of the hardest material
+— auth, uploads, SSE, scheduling, channels, presence, the capstone — whose
+code had never once been through a compiler.
+
+It found five things, all of which had shipped:
+
+- **`principal.name` does not exist**, in *two* articles (`04-presence`,
+  `08-capstone`). `ChannelPrincipal` has `subject` and `hasRole(_:)` and
+  nothing else; the demo template uses `principal.subject` throughout.
+- **`@Service final class` cannot compile** (`02-authentication`).
+  `@Service`'s expansion requires `Sendable`, and a class holding a mutable
+  `@Autowired` property cannot be one. The error names `Sendable` at the
+  macro rather than the property, which makes it read as stranger than it
+  is. A `struct` is the shape the templates use everywhere.
+- **`Channel` is ambiguous in the capstone.** `FlightDataPostgres`
+  transitively re-exports NIO, and `NIOCore.Channel` is a socket, not a
+  topic — so a file importing both halves must write
+  `FlightChannels.Channel`. Nothing earlier hits this, because the capstone
+  is the first exercise to combine realtime with data, which is its whole
+  purpose. Its presence payload is also `[String: String]`, so wrapping a
+  value in `.string(…)` is a type error.
+- **`@Scheduler` needs `import Foundation`** (`05-scheduling`) — the
+  expansion refers to `Date`, and omitting it fails inside macro-expanded
+  code rather than at anything the reader typed.
+- **A struct initialised with a property it doesn't declare**
+  (`01-websockets`'s `EchoHandler(room:)`).
+
+Every one is the same class of defect: plausible-looking code that no one
+had run. Each is now fixed *and explained* in the article, since a reader
+hitting the same wall deserves the reason rather than just the cure.
+
+Where an article quotes a framework declaration rather than user code, the
+check was different — compare it to the real source. `PresenceEntry`,
+`PubSub`, `DistributedPubSubAdapter`, `onTopicTerminated`,
+`heartbeatCheckInterval`, `heartbeatTimeout`, `gracefulShutdownSignals` and
+`FlightPubSubValkeyModule` all match what is printed. `05-teardown`,
+`07-clustering`, `09-deployment` and `06-actuator` stay prose because that
+is all they contain.
+
+Templates are named per exercise, not per part: `basics` where the lesson
+is only data, `demo` where it needs Security, Scheduler, Channels or
+Presence traits `basics` doesn't carry. The checker also learned to pass
+`--build-tests` when a solution lives in `Tests/`, which plain
+`swift build` skips entirely — without it those files would have reported
+a pass while never being compiled.
+
+**19 `app-b` solutions and 11 snippets: 30 of 41 exercises now verified.**
+The remainder are prose by nature (Part 0's four, `06-actuator`,
+`11-flight-data`, and the three above) plus `07-static-assets` and the
+still-unwritten `06-cookies`.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with
