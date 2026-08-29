@@ -40,6 +40,12 @@ services:
       - ./content:/content:ro
     expose:
       - '3000'
+    # Published for looking at the site in isolation. Pages work here;
+    # the interactive tiers do not, and cannot — `/api/*` lives on
+    # `server` and `/socket` needs a WebSocket proxy, both of which Caddy
+    # provides on :80 and this port does not. Requests to `/api/*` here
+    # answer 421 saying so rather than 404ing. Use http://localhost/ for
+    # anything involving Run.
     ports:
       - '3000:3000'
 
