@@ -25,6 +25,13 @@ struct AppModule: FlightModule {
 }
 ```
 
+The empty `pipeline("assets") { }` is the point of the lane, not a
+placeholder: declaring a lane with nothing in it is how this traffic opts
+out of everything the default lane carries. That needs flight `0.9.1` or
+later — before it, an empty block registered nothing, the lane left no
+trace, and the mount failed at startup complaining the lane was never
+declared. (Found by compiling this exercise; see the changelog entry.)
+
 "Fallback" is exact: a mount only answers a `GET`/`HEAD` the router didn't
 match. A real route always wins, matched routes never pay anything for the
 mount's existence, and `pipelines: ["assets"]` runs *only* an empty lane for

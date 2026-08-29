@@ -1,0 +1,8 @@
+# app-a is the learner's starting state for this exercise, as a diff
+# against the named `flight new` template (PLAN §6). Empty here: the task
+# is creating the file that app-b holds.
+#
+# Nothing serves these to a browser — the app tier was dropped (see
+# STATUS.md). They exist so CI can materialise template + app-a + app-b
+# and actually build the solution, which is where the real bug-catching
+# value turned out to be.

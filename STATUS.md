@@ -1057,10 +1057,21 @@ carries a per-call token. A regression test asserts the route serves and
 the lane composes to an empty chain; it was confirmed to fail without the
 fix, with exactly the original error. Full suite green at 970 tests.
 
-**`07-static-assets` can be verified as soon as flight cuts a release
-carrying that fix** — the templates resolve to the latest *tag*, and
-`v0.9.0` predates it. Until then its `app-b` is deliberately absent rather
-than written against something CI cannot reach.
+flight `v0.9.1` was cut carrying that fix, and a fresh `flight new --tier
+skeleton` resolves to it, so `07-static-assets` is now verified too —
+with the empty lane the article actually teaches, not a workaround.
+
+Everything the article claims was checked against the running app rather
+than assumed: a real route still wins over the mount; the content-hashed
+bundle gets `Cache-Control: public, max-age=31536000, immutable` while
+`index.html` gets `no-cache` from the *same* mount; an HTML-preferring
+miss gets the SPA shell while the same miss preferring JSON gets an
+honest 404; `/api` stays excluded rather than falling into the shell; and
+a conditional request carrying the ETag comes back `304` with a zero-byte
+body. The article now also states the `0.9.1` floor, since an empty lane
+silently failed to exist before it.
+
+**Part 1 is complete: all nine exercises written and CI-verified.**
 
 `curriculum.ts`'s runtime labels were also stale: Parts 1, 3 and 4 still
 claimed the `app`/`app+db` tiers that were removed. They are now `local`
