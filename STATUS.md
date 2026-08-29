@@ -923,8 +923,40 @@ VM. Same idea, completely different bill.
   content caught a `ResponseEncodable` error that had been wrong in
   published prose since M0, an invisible-payoff exercise, and a genuine
   upstream bug in flight-cli's `basics` template (fixed there, `be90caa`).
-  **None of that needed a live runner pool** — it needs CI that builds and
-  runs exercises, which is far cheaper than serving them.
+  **None of that needed a live runner pool** — and it is now
+  `scripts/check-exercises.py` plus `.github/workflows/exercises.yml`,
+  which is PLAN §6's promise ("builds and runs every `app-b` solution, and
+  executes every snippet solution") actually delivered.
+
+  All 18 exercises pass: 11 snippets built *and run* against real seeded
+  Postgres, 7 `app-b` solutions built against a real `flight new` template
+  checked out from flight-cli rather than vendored, so the CLI stays the
+  single source of truth for project shape.
+
+  It was verified the only way a test suite can honestly be verified — by
+  breaking things and watching it fail. Reintroducing the
+  `ResponseEncodable` bug failed exactly `02-first-route` while the other
+  six still passed, which also proves the between-exercise reset works
+  (three exercises define `IssueController`, so a leftover file could
+  otherwise satisfy a reference that should have failed). Reintroducing the
+  `repo.one`-on-a-non-unique-predicate bug was the more interesting one:
+  it **compiled cleanly** and failed only when run. That is the whole
+  argument for running rather than building, demonstrated rather than
+  asserted.
+
+  Two real bugs were found in the suite itself while building it, both by
+  running it rather than reading it: it copied a compiled `.build` into a
+  temp directory, which cannot work because Clang bakes absolute
+  module-cache paths into `.pcm` files — the same trap the runner's
+  Dockerfile already documents — and the `swift:6.3.3` image has neither
+  `python3` nor `rsync`, found by executing the workflow's steps in that
+  image rather than assuming what it contains.
+
+  Known limit, stated rather than left to be discovered: the run phase
+  checks the **exit code**, not the output. A snippet that prints the wrong
+  thing and exits 0 still passes. PLAN §6's "expected-output assertions"
+  would close that; both bugs this has caught so far were a compile error
+  and a crash, so neither needed it yet.
 - The stale-build diagnostic and the `421` guard on `/api/*`, both of
   which came out of the same period and apply regardless of tier.
 

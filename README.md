@@ -93,6 +93,27 @@ call appears to hang. The backend itself answers such a request fine when
 reached directly, and browsers always set `Content-Length`, so this is a
 hand-testing trap rather than something clients hit.
 
+## Exercise CI
+
+`scripts/check-exercises.py` builds every exercise's real code and *runs*
+the ones that can be run:
+
+```bash
+# needs a sibling flight-cli checkout for the app-tier templates
+python3 scripts/check-exercises.py
+
+# with a seeded database, the db-tier snippets run rather than just build
+python3 scripts/check-exercises.py \
+  --database-url postgres://postgres:pw@127.0.0.1:5432/flight_school_seed
+```
+
+Running matters more than building, and that isn't a stylistic preference:
+the last real bug this caught — `repo.one` on a non-unique predicate —
+**compiled cleanly** and only failed when executed. A build-only check
+would have shipped it. `.github/workflows/exercises.yml` runs the whole
+thing on every PR and weekly, the schedule being there because the usual
+cause of a break is an upstream release rather than an edit here.
+
 ## Contributing content
 
 Every markdown file under `content/` needs frontmatter (`title`,
