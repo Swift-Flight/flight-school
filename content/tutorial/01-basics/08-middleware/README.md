@@ -20,9 +20,8 @@ struct RequestTiming {
 }
 ```
 
-It both logs the timing and returns it as a header — the header is what
-you can actually see from here, since a running app's own log output
-doesn't stream into this page yet.
+It both logs the timing and returns it as a header, so you can see the
+layer working with `curl -i` as well as in the log.
 
 `@Middleware` registers `RequestTiming` as an ordinary singleton component —
 `@Autowired` can resolve it, a test can construct it directly — exactly like
@@ -40,12 +39,11 @@ simply never runs, which is a one-line fix to notice and make, not a
 silently wrong answer shipping because a registration call was forgotten
 somewhere.
 
-**This is why the exercise has two files.** The editor above lists both:
-`RequestTiming.swift`, where the type goes, and `Main.swift`, where it
-gets enrolled. Write only the first and press Run — the app builds and
-serves exactly as before, and the log stays quiet, because nothing ever
-put the layer in a pipeline. Add the `pipeline { }` block to `AppModule.configure`, Run again, and the
-header appears:
+**This is why the exercise touches two files**: `RequestTiming.swift`,
+where the type goes, and `Main.swift`, where it gets enrolled. Write only
+the first and rebuild — the app serves exactly as before and the header
+never appears, because nothing put the layer in a pipeline. Add the
+`pipeline { }` block to `AppModule.configure`, rebuild, and it does:
 
 ```
 HTTP/1.1 200 OK

@@ -25,48 +25,22 @@
 		reverse_proxy server:9100
 	}
 
-	# /preview/runner-N/* → the fixed runner pool, WebSockets included —
-	# PLAN §4, built in M3. Static routes because the pool size is fixed at
-	# deploy time; there is no dynamic service discovery to wire up.
-	#
-	# Keyed by *service name* (`runner-1`), not a positional index into the
-	# pool: the server derives this path from the host component of the
-	# runner base URL it already holds for the session
-	# (`http://runner-1:9000` → `runner-1`), so there is no second numbering
-	# scheme to keep in step with `SessionBroker`'s free-list ordering as
-	# runners cycle in and out of it.
-	#
-	# `handle_path`, not `handle` — it strips the matched prefix before
-	# proxying, which is required here: the learner's app is a stock Flight
-	# app that knows nothing about being served under a subpath, and its
-	# routes are `/hello`, not `/preview/runner-1/hello`. (This is the exact
-	# opposite of the `/api/*` decision above, where the server's own routes
-	# really do start with `/api` and stripping would 404 everything — same
-	# reasoning, opposite conclusion, because the upstream differs.)
-	#
-	# Known limit, worth knowing before wiring an exercise that trips it:
-	# prefix-stripping only works for an app that never emits its own URLs.
-	# An app returning HTML with `/static/app.css`, or issuing a redirect to
-	# `/login`, sends the browser to the *site* root, not back through this
-	# prefix. Fine for the exercises wired today (plain text and JSON); the
-	# fix when that changes is a per-runner hostname, which is also PLAN
-	# §5's own "separate preview domain" hardening step.
-	handle_path /preview/runner-1/* {
-		reverse_proxy runner-1:8080
-	}
-	handle_path /preview/runner-2/* {
-		reverse_proxy runner-2:8080
-	}
-	handle_path /preview/runner-3/* {
-		reverse_proxy runner-3:8080
-	}
-	handle_path /preview/runner-4/* {
-		reverse_proxy runner-4:8080
-	}
-
 	reverse_proxy site:3000
 
 	encode gzip
+
+	# /preview/N/* → the fixed runner pool, WebSockets included — PLAN §4.
+	# Static routes because the pool size is fixed at deploy time; there is
+	# no dynamic service discovery to wire up. Uncomment and repeat one
+	# block per runner once the preview proxy (M3) exists — the runner
+	# pool itself has no exposed HTTP surface of its own (see
+	# docker-compose.yml's `runner-*` services), so this stays commented
+	# until something serves a learner's actual app preview, not just the
+	# supervisor's internal lease/write/run API.
+	#
+	# handle_path /preview/1/* {
+	# 	reverse_proxy runner-1:8080
+	# }
 
 	log {
 		output stdout

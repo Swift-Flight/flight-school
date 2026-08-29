@@ -567,8 +567,18 @@ boring deployment that satisfies "easy."
   channel-streamed output, Part 2 interactive through the no-DB lessons.
   Cheapest interactive win, biggest teaching payoff (`debugSQL`).
 - **M2 — DB tier.** Template databases, session scrubbing; rest of Part 2.
-- **M3 — App tier + preview proxy.** Parts 0–1 interactive; Part 3.
-- **M4 — Realtime.** WS through the preview proxy; Part 4 + capstone.
+- **M3 — App tier + preview proxy.** ~~Parts 0–1 interactive; Part 3.~~
+  **Built, measured, and reversed.** The tier worked; the economics
+  didn't — ~25min warm-ups (35 with `app+db`), a permanently warm 4×8G
+  pool for a mostly-reading audience, and the lessons that most needed it
+  (static assets, configuration, middleware's log output) were exactly the
+  ones it couldn't teach. Parts 1/3/4 ship as prose plus a project run
+  locally, which §1 already named as the degraded mode and which is the
+  right primary mode above snippet size. The bug-catching this promised is
+  real but comes from **CI building the exercises**, not from serving them.
+  See STATUS.md; the code is in git history.
+- **M4 — Realtime.** ~~WS through the preview proxy; Part 4 + capstone.~~
+  Dropped with M3 — it depended on the preview proxy.
 - **M5 — Polish/hardening.** Solve-diff UX, search, presence dogfood,
   runner recycle cadence, maybe LSP, maybe REPL console, separate preview
   domain.

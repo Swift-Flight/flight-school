@@ -30,7 +30,7 @@ declared, without naming it yet. Absent from every layer, it's `false`;
 present but the wrong shape (a string where a `Bool` was expected) still
 fails at bootstrap rather than silently keeping the default.
 
-**Try both forms together.** The editor is open on a new controller:
+**Try both forms together** in your own project, with a new controller:
 
 ```swift
 @Controller
@@ -54,8 +54,8 @@ name=App maintenance=false greeting=hello
 all — they're their defaults, and the app started anyway, which is the
 entire difference between the two forms.
 
-Now break it on purpose: change `"app.name"` to `"app.nam"` and press Run.
-It doesn't start and then fail; it doesn't start at all:
+Now break it on purpose: change `"app.name"` to `"app.nam"` and rebuild.
+It doesn't start and then fail; it doesn't build at all:
 
 ```
 error: @ConfigValue key 'app.nam' in ConfigController is missing from

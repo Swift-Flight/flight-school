@@ -133,83 +133,25 @@ export async function loadSnippet(relativePath: string): Promise<string | null> 
 	return readFile(fullPath, 'utf-8');
 }
 
-export interface AppExerciseFile {
-	/** Path inside the project, e.g. `Sources/App/Main.swift`. */
-	path: string;
-	/** `app-a`'s content for this path — empty when the learner starts from
-	 *  a blank file, which is not the same as the exercise being unwritten. */
-	initialCode: string;
-}
-
-export interface AppExercise {
-	doc: RenderedDoc;
-	/** Every file the learner edits, in `meta.json` order. The first is the
-	 *  one the editor opens on. */
-	files: AppExerciseFile[];
-	template: string;
-}
-
 /**
- * Reads an `app`-tier exercise: PLAN §6's real shape, a directory holding
- * `README.md` + `meta.json` + `app-a`/`app-b` diffs against a named
- * `flight-cli` template, rather than the snippet tier's flatter
- * one-markdown-plus-one-sibling-file layout (see `loadSnippet`).
+ * The rendered prose for one exercise, whichever layout it uses on disk.
  *
- * Every path in `focus` is read, in order; the first is the one the editor
- * opens on. An exercise with more than one is what the editor's file list
- * exists for — `08-middleware` is the case that needed it, since
- * registering a `@Middleware` type and enrolling it in a pipeline are
- * deliberately separate steps in two different files.
- *
- * `app-b` (the solution) is deliberately not read here: nothing serves it
- * yet. Solve-diff UX is PLAN §10's M5.
+ * Snippet-tier exercises are a flat `<slug>.md`. The `app`-tier ones are a
+ * directory — `README.md` beside `meta.json` and `app-a`/`app-b` (PLAN §6)
+ * — because their code is a project rather than a file, and CI builds
+ * those `app-b` solutions even though the site only renders the prose.
+ * Callers don't need to care which they're looking at.
  */
-export async function loadAppExercise(relativeDir: string): Promise<AppExercise | null> {
-	const fullPath = path.join(CONTENT_ROOT, relativeDir);
-	if (!fullPath.startsWith(CONTENT_ROOT)) return null;
-	if (!existsSync(path.join(fullPath, 'meta.json'))) return null;
-
-	const doc = await loadDoc(path.join(relativeDir, 'README.md'));
-	if (!doc) return null;
-
-	let meta: { template?: string; focus?: string[] };
-	try {
-		meta = JSON.parse(await readFile(path.join(fullPath, 'meta.json'), 'utf-8'));
-	} catch {
-		return null;
-	}
-	if (!meta.focus?.length) return null;
-
-	const files: AppExerciseFile[] = [];
-	for (const focus of meta.focus) {
-		// Absent app-a file means "start from empty", which is a real and
-		// common case (an exercise whose task is creating the file), not a
-		// missing-content case — unlike an absent meta.json or README above.
-		const startingPath = path.join(fullPath, 'app-a', focus);
-		const initialCode =
-			startingPath.startsWith(fullPath) && existsSync(startingPath)
-				? await readFile(startingPath, 'utf-8')
-				: '';
-		files.push({ path: focus, initialCode });
-	}
-
-	return { doc, files, template: meta.template ?? 'skeleton' };
+export async function loadExerciseDoc(
+	part: string,
+	slug: string
+): Promise<RenderedDoc | null> {
+	return (
+		(await loadDoc(`tutorial/${part}/${slug}.md`)) ??
+		(await loadDoc(`tutorial/${part}/${slug}/README.md`))
+	);
 }
 
-/**
- * Whether *some* source exists for an exercise slug — either the flat
- * `<slug>.md` or the directory form `<slug>/` (PLAN §6).
- *
- * Deliberately shape-agnostic: it answers "is there content here at all?"
- * without knowing how to read it. That's the point. The site's own code is
- * baked into its image while `content/` is bind-mounted live, so the two
- * can disagree — a running build can be too old to understand a shape the
- * content already uses. When that happens the loaders return `null` and
- * the page would otherwise render the same "coming soon" placeholder it
- * shows for genuinely unwritten content, which is indistinguishable from
- * the real thing and sends you looking in the wrong place. This lets the
- * page say "the content is there, this build can't read it" instead.
- */
 export function exerciseSourceExists(part: string, slug: string): boolean {
 	const base = path.join(CONTENT_ROOT, 'tutorial', part, slug);
 	if (!base.startsWith(CONTENT_ROOT)) return false;

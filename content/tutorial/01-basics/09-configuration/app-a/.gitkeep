@@ -1,8 +1,8 @@
-# app-a is the learner's starting diff against the `skeleton` template
-# (PLAN §6). It is empty here on purpose: this exercise's whole task is
-# creating Sources/App/Controllers/GreetingController.swift, which the
-# template doesn't ship, so there is nothing to pre-seed — the editor
-# opens empty and the file comes into existence when they press Run.
+# app-a is the learner's starting state for this exercise, as a diff
+# against the named `flight new` template (PLAN §6). Empty here: the task
+# is creating the file that app-b holds.
 #
-# An exercise that starts from partially-written code puts that code here,
-# at the same path it occupies in the project.
+# Nothing serves these to a browser — the app tier was dropped (see
+# STATUS.md). They exist so CI can materialise template + app-a + app-b
+# and actually build the solution, which is where the real bug-catching
+# value turned out to be.

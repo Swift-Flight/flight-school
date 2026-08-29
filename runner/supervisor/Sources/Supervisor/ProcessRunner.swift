@@ -14,10 +14,6 @@ enum RunEvent: Sendable {
     case exited(exitCode: Int32)
     case timedOut
     case truncated
-    /// App tier only: the learner's server process is up, and this run's
-    /// stream is about to end while the server keeps running. Not a claim
-    /// that it's accepting connections yet — see `runApp`.
-    case serverStarted
 }
 
 /// Runs `swift build`, then — only if it succeeded — the resulting
@@ -37,18 +33,6 @@ enum RunEvent: Sendable {
 enum ProcessRunner {
     static let wallClockLimit: Duration = .seconds(15)
     static let outputByteLimit = 64 * 1024
-
-    /// The app tier's *build* cap. Deliberately looser than the snippet
-    /// tier's 15s: PLAN §3 measured a warm Flight app incremental rebuild
-    /// at 7–8s, and 15s leaves too little room above that for ordinary
-    /// hardware variance. The app tier's *serve* phase has no cap at all —
-    /// PLAN §5 says "app run capped per lease," and the lease is what ends
-    /// it (via `/run` again, `/reset`, `/release`, or the reaper).
-    static let appBuildWallClockLimit: Duration = .seconds(30)
-
-    /// How long to wait after spawning the app before believing it stayed
-    /// up. Not a readiness check — see `runApp`.
-    static let appStartupGrace: Duration = .milliseconds(500)
 
     static func run(in workspace: URL, databaseURL: String?) -> AsyncStream<RunEvent> {
         AsyncStream { continuation in
@@ -121,136 +105,6 @@ enum ProcessRunner {
         }
     }
 
-    /// The app tier: build, then leave a *server* running and end the
-    /// stream — the opposite of `run`'s build-and-run-to-completion.
-    ///
-    /// The stream deliberately ends at `.serverStarted` rather than living
-    /// as long as the process. Keeping it open would mean one HTTP request
-    /// held open for the whole session (up to the hard cap, an hour today)
-    /// across Caddy, the server's consuming task, and the browser — every
-    /// one of which has its own idle timeout, none of which this project
-    /// has ever exercised at that duration. The spawned server outlives
-    /// this call, owned by `WorkspaceState`, and dies when the *lease*
-    /// says so: a later `/run`, `/reset`, `/release`, or the reaper.
-    ///
-    /// The cost, stated plainly: the learner sees build output and then
-    /// nothing. Streaming a running app's logs wants its own long-lived,
-    /// independently-reconnectable endpoint rather than overloading this
-    /// one request to mean two different lifetimes.
-    static func runApp(
-        in workspace: URL, databaseURL: String?, state: WorkspaceState
-    ) -> AsyncStream<RunEvent> {
-        AsyncStream { continuation in
-            let task = Task {
-                await executeApp(
-                    in: workspace, databaseURL: databaseURL, state: state,
-                    continuation: continuation)
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
-    private static func executeApp(
-        in workspace: URL, databaseURL: String?, state: WorkspaceState,
-        continuation: AsyncStream<RunEvent>.Continuation
-    ) async {
-        // Whatever the previous run left behind — a build still in flight,
-        // or a server still bound to 8080 — goes first. Without this, a
-        // second Run races the first in the same `.build` directory, and
-        // the new server loses the port bind to the old one.
-        await state.killRunning()
-
-        let budget = OutputBudget(limit: outputByteLimit)
-
-        let buildResult = await runProcess(
-            executable: "/usr/bin/env", arguments: ["swift", "build"],
-            workingDirectory: workspace, timeout: appBuildWallClockLimit,
-            onSpawn: { await state.setRunningProcess($0) }
-        ) { line in
-            guard budget.consume(line.utf8.count) else { return }
-            continuation.yield(.buildOutput(line))
-            if budget.isExhausted { continuation.yield(.truncated) }
-        }
-        await state.setRunningProcess(nil)
-
-        switch buildResult {
-        case .timedOut:
-            continuation.yield(.timedOut)
-            return
-        case .completed(let code):
-            continuation.yield(.buildDone(exitCode: code))
-            guard code == 0 else {
-                continuation.yield(.exited(exitCode: code))
-                return
-            }
-        }
-
-        var environment = ProcessInfo.processInfo.environment
-        // The template's flight.yaml binds 127.0.0.1, which is unreachable
-        // from Caddy in another container. Flight's config layers env over
-        // file (`FLIGHT_` + the uppercased dotted key), so this needs no
-        // template edit — verified against a real run, not just the
-        // mapping in FlightConfigCore.
-        environment["FLIGHT_SERVER_HOST"] = "0.0.0.0"
-        if let databaseURL {
-            environment["DATABASE_URL"] = databaseURL
-        }
-
-        let process = Process()
-        process.executableURL = workspace.appending(path: ".build/debug/App")
-        process.arguments = []
-        process.currentDirectoryURL = workspace
-        process.environment = environment
-
-        // The pipe has to keep being drained for as long as the server
-        // lives, not just while this stream is open: an undrained pipe
-        // fills its kernel buffer and then *blocks the writer*, which
-        // would hang the learner's app the moment it logged enough. The
-        // handler below stays installed for the process's whole lifetime
-        // and yields into a continuation that has usually already
-        // finished — a no-op by then, which is exactly the intent. What it
-        // catches before that point is the crash-at-boot output.
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        let lineBuffer = LineBuffer { line in
-            guard budget.consume(line.utf8.count) else { return }
-            continuation.yield(.runOutput(line))
-        }
-        pipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else {
-                handle.readabilityHandler = nil
-                return
-            }
-            lineBuffer.append(data)
-        }
-
-        do {
-            try process.run()
-        } catch {
-            continuation.yield(.runOutput("failed to start the app: \(error)"))
-            continuation.yield(.exited(exitCode: -1))
-            return
-        }
-        await state.setRunningProcess(process)
-
-        // Not a readiness check — nothing here claims the app is accepting
-        // connections, and the preview iframe's own load/retry handles
-        // that gap. This catches the one failure the decoupled stream
-        // would otherwise swallow silently: a server that spawns fine and
-        // dies immediately (a boot-time fatalError, a bad config, a port
-        // already bound), which would otherwise report `serverStarted` and
-        // then simply not be there.
-        try? await Task.sleep(for: appStartupGrace)
-        if process.isRunning {
-            continuation.yield(.serverStarted)
-        } else {
-            continuation.yield(.exited(exitCode: process.terminationStatus))
-        }
-    }
-
     private enum ProcessOutcome {
         case completed(exitCode: Int32)
         case timedOut
@@ -263,8 +117,6 @@ enum ProcessRunner {
         arguments: [String],
         workingDirectory: URL,
         environment: [String: String]? = nil,
-        timeout: Duration = wallClockLimit,
-        onSpawn: (@Sendable (Process) async -> Void)? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async -> ProcessOutcome {
         let process = Process()
@@ -292,9 +144,6 @@ enum ProcessRunner {
             onLine("failed to start \(executable): \(error)")
             return .completed(exitCode: -1)
         }
-        // Registered *after* a successful spawn, so a failed launch never
-        // leaves a dead process recorded as this lease's running one.
-        await onSpawn?(process)
 
         let exitCode = await withTaskGroup(of: ProcessOutcome?.self) { group in
             group.addTask {
@@ -304,7 +153,7 @@ enum ProcessRunner {
                 return .completed(exitCode: process.terminationStatus)
             }
             group.addTask {
-                try? await Task.sleep(for: timeout)
+                try? await Task.sleep(for: wallClockLimit)
                 return .timedOut
             }
             let first = await group.next() ?? .timedOut

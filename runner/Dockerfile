@@ -22,20 +22,15 @@ FROM swift:6.3.3
 RUN groupadd --gid 10001 runner && \
     useradd --uid 10001 --gid runner --create-home --shell /usr/sbin/nologin runner
 
-# The workspace *templates* — source and fetched dependencies, but never
-# compiled here. One per execution tier (PLAN §4: "prebuilt workspaces,
-# one per execution tier/template"), so the runner pool stays
-# undifferentiated and any runner can serve any tier; which one a session
-# gets is decided at `/lease` time, not by which container it lands on.
-#
-# PLAN §5 calls for `/workspace` to be a tmpfs mount at container runtime
-# (read-only rootfs otherwise, and no network egress except Postgres),
-# which starts empty on every container start, discarding anything baked
-# into the image at that exact path. entrypoint.sh copies these templates
-# into /workspace/<tier> the first time each is empty, and the
-# supervisor's own warm-up build (Main.swift) does the real compile there,
-# fresh, every time. Two things had to be true at once and were verified
-# separately, not assumed:
+# The workspace *template* — source and fetched dependencies, but never
+# compiled here. PLAN §5 calls for `/workspace` to be a tmpfs mount at
+# container runtime (read-only rootfs otherwise, and no network egress
+# except Postgres), which starts empty on every container start,
+# discarding anything baked into the image at that exact path.
+# entrypoint.sh copies this template into /workspace the first time it's
+# empty, and the supervisor's own warm-up build (Main.swift) does the
+# real compile there, fresh, every time. Two things had to be true at
+# once and were verified separately, not assumed:
 # - `swift package resolve` (fetches dependency *source* into
 #   .build/checkouts, compiles nothing) has to run here, at image-build
 #   time, on real network access — without it, the runtime warm-up build
@@ -47,35 +42,15 @@ RUN groupadd --gid 10001 runner && \
 #   verified directly by building this image the wrong way first.
 #   Resolving-without-building sidesteps that: the checkouts carry no
 #   path-sensitive compiled state, only source.
-WORKDIR /opt/workspace-template-snippet
+WORKDIR /opt/workspace-template
 COPY workspace/Package.swift workspace/Package.resolved ./
 COPY workspace/Sources ./Sources
 RUN swift package resolve
 
-# The app tier's workspace: the vendored flight-cli `skeleton` template —
-# a real, whole Flight application rather than one file. See
-# workspace-app/VENDORED.md for provenance and why Package.resolved is
-# committed here when the upstream template doesn't carry one.
-WORKDIR /opt/workspace-template-app
-COPY workspace-app/Package.swift workspace-app/Package.resolved workspace-app/flight.yaml ./
-COPY workspace-app/Sources ./Sources
-COPY workspace-app/Tests ./Tests
-RUN swift package resolve
-
-# The pristine references /reset and /release restore from — never built
-# or run themselves.
-#
-# The snippet tier's is one file, the only one that's ever allowed to
-# change. The app tier's is the two editable subtrees, and deliberately
-# *not* the whole project: restoring it must not touch `.build` (which
-# sits at the project root), or every reset would throw away the warm
-# build this tier exists to keep and make the next run a cold one.
-RUN mkdir -p /workspace-pristine/snippet/Sources/exercise && \
-    cp /opt/workspace-template-snippet/Sources/exercise/main.swift \
-       /workspace-pristine/snippet/Sources/exercise/main.swift && \
-    mkdir -p /workspace-pristine/app/Sources /workspace-pristine/app/Tests && \
-    cp -r /opt/workspace-template-app/Sources/App /workspace-pristine/app/Sources/App && \
-    cp -r /opt/workspace-template-app/Tests/AppTests /workspace-pristine/app/Tests/AppTests
+# The pristine reference /reset and /release restore from — just the one
+# file that's ever allowed to change, never itself built or run.
+RUN mkdir -p /workspace-pristine/Sources/exercise && \
+    cp Sources/exercise/main.swift /workspace-pristine/Sources/exercise/main.swift
 
 COPY --from=supervisor-build /supervisor-src/.build/release/Supervisor /app/supervisor
 COPY supervisor/flight.yaml /app/flight.yaml
@@ -86,8 +61,7 @@ COPY entrypoint.sh /app/entrypoint.sh
 # mount, this is what entrypoint.sh finds empty and populates from the
 # template on first run, exactly the same code path either way.
 RUN mkdir -p /workspace && \
-    chown -R runner:runner /opt/workspace-template-snippet /opt/workspace-template-app \
-        /workspace /workspace-pristine /app && \
+    chown -R runner:runner /opt/workspace-template /workspace /workspace-pristine /app && \
     chmod +x /app/entrypoint.sh
 
 # SwiftPM and Clang need a writable HOME for their own caches

@@ -70,9 +70,9 @@ first — regardless of the order modules are listed in `Main.swift`'s
 array. You'll see this directly once Part 2 adds a database module ahead
 of your own.
 
-**Try it — this is the exercise.** The editor is open on a new file,
-`Sources/App/Controllers/StatusController.swift`. Write a controller in
-it:
+**Try it — this is the exercise.** In a project of your own
+(`flight new --tier skeleton myapp`, from Part 0), add
+`Sources/App/Controllers/StatusController.swift`:
 
 ```swift
 import FlightCore
@@ -89,8 +89,8 @@ struct StatusController {
 }
 ```
 
-Press Run. `curl /status` answers `App: up` — and nothing in `AppModule`
-or `Main.swift` changed to make that happen. That's `flightRegisterAll`
+`swift run`, then `curl 127.0.0.1:8080/status` — it answers `App: up`, and
+nothing in `AppModule` or `Main.swift` changed to make that happen. That's `flightRegisterAll`
 doing its job: the plugin found the new type at build time and wrote the
 registration for it.
 

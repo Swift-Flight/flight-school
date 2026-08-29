@@ -29,36 +29,20 @@ struct RunnerClient: Sendable {
     }
 
     private static let requestTimeout: TimeAmount = .seconds(10)
-
-    /// Always longer than the runner's own wall-clock cap for the tier, so
-    /// the runner is always the one that times out first — a client-side
-    /// timeout racing the server-side one would leave the actual outcome
-    /// ambiguous.
-    ///
-    /// The app tier keeps that same property despite its server having no
-    /// cap at all, because its `/run` request does not stay open for the
-    /// server's lifetime: the stream ends at `server_started` and the
-    /// process outlives it (see `ProcessRunner.runApp`). So the request is
-    /// still bounded — a 30s build cap plus spawn — and 60s clears it
-    /// comfortably. Had the stream stayed open for the whole session, this
-    /// would have had to exceed the session hard cap instead, turning
-    /// every run into an hour-long HTTP request.
-    private static func runTimeout(for tier: Tier) -> TimeAmount {
-        switch tier {
-        case .snippet: .seconds(30)  // vs. ProcessRunner.wallClockLimit, 15s
-        case .app: .seconds(60)  // vs. ProcessRunner.appBuildWallClockLimit, 30s
-        }
-    }
+    // Longer than the runner's own 15s wall-clock build+run cap (see
+    // ProcessRunner.wallClockLimit) so the runner is always the one that
+    // times out first — a client-side timeout racing the server-side one
+    // would leave the actual outcome ambiguous.
+    private static let runTimeout: TimeAmount = .seconds(30)
 
     /// `databaseURL` is only present for a `db`-tier session (PLAN §3) —
     /// the runner stores it and hands it to every run's process
     /// environment as `DATABASE_URL`, but never needs it itself, which is
     /// why it travels as a header the runner just remembers rather than a
     /// JSON body `/lease` has to parse.
-    func lease(baseURL: String, tier: Tier = .snippet, databaseURL: String? = nil) async throws -> String {
+    func lease(baseURL: String, databaseURL: String? = nil) async throws -> String {
         var request = HTTPClientRequest(url: "\(baseURL)/lease")
         request.method = .POST
-        request.headers.add(name: "X-Tier", value: tier.rawValue)
         if let databaseURL {
             request.headers.add(name: "X-Database-Url", value: databaseURL)
         }
@@ -80,23 +64,6 @@ struct RunnerClient: Sendable {
         request.headers.add(name: "X-Lease-Id", value: leaseID)
         request.headers.add(name: "Content-Type", value: "application/json")
         request.body = .bytes(try JSONEncoder().encode(["content": content]))
-        let response = try await HTTPClient.shared.execute(request, timeout: Self.requestTimeout)
-        guard response.status == .noContent else {
-            throw RunnerClientError.unexpectedStatus(Int(response.status.code), "/write")
-        }
-    }
-
-    /// App tier: several files at once, keyed by path relative to the
-    /// project root. One request rather than one per file so the runner
-    /// can validate every path against its allowlist before writing any
-    /// of them — a partially-applied write would leave the workspace in a
-    /// state neither the learner nor `/reset` expects.
-    func writeFiles(baseURL: String, leaseID: String, files: [String: String]) async throws {
-        var request = HTTPClientRequest(url: "\(baseURL)/write")
-        request.method = .POST
-        request.headers.add(name: "X-Lease-Id", value: leaseID)
-        request.headers.add(name: "Content-Type", value: "application/json")
-        request.body = .bytes(try JSONEncoder().encode(["files": files]))
         let response = try await HTTPClient.shared.execute(request, timeout: Self.requestTimeout)
         guard response.status == .noContent else {
             throw RunnerClientError.unexpectedStatus(Int(response.status.code), "/write")
@@ -130,14 +97,13 @@ struct RunnerClient: Sendable {
     /// wrote it. No SSE-consuming helper exists anywhere in Flight to
     /// reuse (checked): this is a from-scratch client parser.
     func run(
-        baseURL: String, leaseID: String, tier: Tier = .snippet,
+        baseURL: String, leaseID: String,
         onEvent: @Sendable (_ event: String, _ data: String) async -> Void
     ) async throws {
         var request = HTTPClientRequest(url: "\(baseURL)/run")
         request.method = .POST
         request.headers.add(name: "X-Lease-Id", value: leaseID)
-        let response = try await HTTPClient.shared.execute(
-            request, timeout: Self.runTimeout(for: tier))
+        let response = try await HTTPClient.shared.execute(request, timeout: Self.runTimeout)
         guard response.status == .ok else {
             throw RunnerClientError.unexpectedStatus(Int(response.status.code), "/run")
         }

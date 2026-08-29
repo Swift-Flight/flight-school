@@ -58,6 +58,19 @@ The runner image is the expensive one (it warms a full SwiftPM build cache
 per execution tier — roughly 25 minutes cold), so rebuild `site` on its
 own when that's all that changed.
 
+### What's interactive, and what isn't
+
+Part 2 (Hangar and Changeset) runs in the browser: an editor, a real
+compile, real output. That tier is one file and a ~2s rebuild, and
+`debugSQL` printing the SQL beside the Swift that produced it is the whole
+reason it exists.
+
+Everything else is prose plus code you run locally with `flight new`. An
+`app` tier that ran whole Flight applications in the browser was built and
+then removed — it worked, but it needed a permanently warm pool of large
+containers and ~25-minute cold starts to show a learner something
+`flight new` shows them in two minutes. STATUS.md has the full reasoning.
+
 ### Reach it on port 80, not the site's own port
 
 `/api/*` and `/socket` are not SvelteKit routes — they belong to the

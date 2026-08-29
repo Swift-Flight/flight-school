@@ -25,20 +25,9 @@ struct SessionService: Sendable {
     /// SessionChannel) — consistent with v1 having no accounts at all
     /// (PLAN §1): knowing the id is exactly as much proof of ownership as
     /// the `HttpOnly` cookie it travels in.
-    func getOrCreateSession(existingSessionID: String?, tier: Tier = .snippet) async throws -> String {
-        if let id = existingSessionID, let existing = await broker.touch(sessionID: id) {
-            // A live session is only reusable for the tier it was leased
-            // for: the runner picked its workspace at `/lease` time and
-            // can't switch mid-lease. Without this check, a learner
-            // arriving at a Part 1 (app) exercise still holding a Part 2
-            // (snippet) session cookie would silently get a snippet
-            // workspace — their code would land in the wrong project and
-            // the failure would look like a compiler error, not a
-            // plumbing bug. Tear the old one down and start fresh.
-            if existing.tier == tier {
-                return id
-            }
-            await endSession(sessionID: id)
+    func getOrCreateSession(existingSessionID: String?) async throws -> String {
+        if let id = existingSessionID, await broker.touch(sessionID: id) != nil {
+            return id
         }
         guard let runnerBaseURL = await broker.claimRunner() else {
             throw SessionBroker.BrokerError.poolExhausted
@@ -47,11 +36,8 @@ struct SessionService: Sendable {
         do {
             let databaseURL = try await postgres.createSessionDatabase(sessionID: sessionID)
             do {
-                let leaseID = try await client.lease(
-                    baseURL: runnerBaseURL, tier: tier, databaseURL: databaseURL)
-                await broker.attach(
-                    sessionID: sessionID,
-                    lease: .init(runnerBaseURL: runnerBaseURL, leaseID: leaseID, tier: tier))
+                let leaseID = try await client.lease(baseURL: runnerBaseURL, databaseURL: databaseURL)
+                await broker.attach(sessionID: sessionID, lease: .init(runnerBaseURL: runnerBaseURL, leaseID: leaseID))
                 return sessionID
             } catch {
                 // The database exists but the runner never accepted it —
@@ -65,31 +51,6 @@ struct SessionService: Sendable {
             await broker.unclaim(runnerBaseURL)
             throw error
         }
-    }
-
-    /// Where this session's preview iframe should point, matching the
-    /// Caddyfile's `/preview/<runner-service-name>/*` routes.
-    ///
-    /// Keyed by the runner's hostname rather than a position in the pool:
-    /// `SessionBroker`'s free list reorders as runners are claimed and
-    /// released, so an index would drift, while the hostname is what Caddy
-    /// actually routes on. `nil` if the session is gone.
-    func previewPath(sessionID: String) async -> String? {
-        guard let lease = await broker.touch(sessionID: sessionID),
-            let host = URLComponents(string: lease.runnerBaseURL)?.host
-        else { return nil }
-        return "/preview/\(host)/"
-    }
-
-    /// App tier: a set of files keyed by path relative to the project
-    /// root. The runner enforces which of those paths are writable — see
-    /// `RunnerController.appEditableRoots`.
-    func writeFiles(sessionID: String, files: [String: String]) async throws {
-        guard let lease = await broker.touch(sessionID: sessionID) else {
-            throw SessionBroker.BrokerError.unknownSession
-        }
-        try await client.writeFiles(
-            baseURL: lease.runnerBaseURL, leaseID: lease.leaseID, files: files)
     }
 
     func write(sessionID: String, content: String) async throws {
@@ -120,12 +81,9 @@ struct SessionService: Sendable {
         let topic = Self.topic(for: sessionID)
         let broadcaster = broadcaster
         let client = client
-        let tier = lease.tier
         Task {
             do {
-                try await client.run(
-                    baseURL: lease.runnerBaseURL, leaseID: lease.leaseID, tier: tier
-                ) { event, data in
+                try await client.run(baseURL: lease.runnerBaseURL, leaseID: lease.leaseID) { event, data in
                     await broadcaster.broadcast(topic: topic, event: event, payload: .object(["data": .string(data)]))
                 }
             } catch {

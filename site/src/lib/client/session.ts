@@ -9,12 +9,6 @@
 export interface SessionInfo {
 	sessionId: string;
 	topic: string;
-	/** App tier only: where the preview iframe should point
-	 *  (`/preview/runner-1/`). The server derives it from the runner this
-	 *  session actually landed on, so it must be read from the most recent
-	 *  `createSession` response rather than cached across sessions — a
-	 *  re-leased session can land on a different runner. */
-	previewPath?: string;
 }
 
 /** One channel push, normalized from the wire envelope — see the doc
@@ -36,25 +30,13 @@ async function post(path: string, body?: unknown): Promise<Response> {
  *  fresh runner from the pool — see server/Sources/Server/SessionService.swift.
  *  Safe to call every time a learner opens an exercise page: idempotent
  *  when the cookie is already live. */
-export async function createSession(options?: { tier?: 'app' }): Promise<SessionInfo> {
-	const query = options?.tier ? `?tier=${options.tier}` : '';
-	const response = await post(`/api/session${query}`);
+export async function createSession(): Promise<SessionInfo> {
+	const response = await post('/api/session');
 	if (!response.ok) {
 		const problem = await response.json().catch(() => null);
 		throw new Error(problem?.detail ?? `could not start a session (${response.status})`);
 	}
 	return response.json();
-}
-
-/** App tier: writes a set of project files, keyed by path relative to the
- *  project root. The runner refuses any path outside the editable
- *  subtrees, so a rejection here is a bug in the caller, not the learner. */
-export async function writeFiles(files: Record<string, string>): Promise<void> {
-	const response = await post('/api/session/write-files', { files });
-	if (!response.ok) {
-		const problem = await response.json().catch(() => null);
-		throw new Error(problem?.detail ?? `could not save your code (${response.status})`);
-	}
 }
 
 export async function writeSnippet(content: string): Promise<void> {

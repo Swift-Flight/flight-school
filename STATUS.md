@@ -868,278 +868,69 @@ Postgres plan (`Seq Scan on issues ... Rows Removed by Filter: 194`) and,
 after the logger fix, its repeated-query detector fired for real on a
 genuine one-parent-at-a-time reporter lookup.
 
-## M3 in progress: the app tier and the preview proxy, wired to one exercise
+## M3 reversed: the app tier was built, measured, and then dropped
 
-M3 (PLAN §10) is the `app` execution tier — a learner editing files in a
-real Flight application, the runner rebuilding and *restarting a live
-server*, and a preview proxy embedding that server in an iframe. The scope
-of this pass is deliberately the architecture plus **one** exercise
-(`01-basics/02-first-route`) proving it end to end, exactly the way
-`06-preloading` proved the `db` tier before the other five were migrated.
-Parts 1 and 3's remaining exercises are explicit follow-up, not something
-this claims to have finished.
+The `app`/`app+db` execution tiers were built end to end and then removed
+on purpose. What follows is the reasoning, because the code is gone from
+`main` and only the git history explains it otherwise.
 
-**The design decision that matters most, and the second-pass catch behind
-it**: the app tier's `/run` SSE stream ends at a new `server_started`
-event, and the spawned server outlives the request that started it. The
-obvious port of the snippet tier's model — stream until the process exits
-— would have held one HTTP request open for the whole session (up to the
-hard cap, an hour) across Caddy, the server's consuming task, and the
-browser's `EventSource`, none of which has ever been exercised at that
-duration here. Decoupling also kept an existing invariant intact rather
-than discarding it: `RunnerClient`'s run timeout is still comfortably
-longer than the runner's own cap (60s vs. the app tier's 30s build cap),
-so the runner remains the side that times out first. Had the stream stayed
-open, that timeout would have had to exceed the session hard cap instead.
+**What was built and did work**: a persistent-process runner lifecycle
+(build, spawn a server, keep it alive across the lease), multi-file writes
+with a structural allowlist, a `preview` Docker network, Caddy
+`/preview/runner-N/*` routes, tier-aware sessions with a `previewPath`,
+and a tabbed editor with a live preview iframe. Seven Part 1 exercises
+were wired and verified through the whole chain. None of it was removed
+for being broken.
 
-The honest cost, stated rather than hidden: the learner sees build output
-and then nothing — a running app's own logs don't stream anywhere yet.
-That wants its own long-lived, independently reconnectable endpoint, not
-an overloaded `/run`. Ending the stream early also introduced exactly one
-new failure mode, so it got a deliberate mitigation rather than being
-discovered later: a server that spawns and *dies immediately* (boot-time
-`fatalError`, bad config, port already bound) would otherwise report
-`server_started` and simply not be there. `ProcessRunner.runApp` waits a
-500ms grace period and re-checks `isRunning`, reporting `exited` with the
-captured output instead. A server that dies *later* still shows up only as
-a failing iframe — the real limit of this design.
+**Why it went anyway** — the costs are concrete and were all measured
+here, not estimated:
 
-**Two real bugs caught by running things rather than reading them**:
+- **~25 minutes of warm-up per container start**, rising to ~35 with the
+  third template `app+db` needed. Two warm `.build` trees already took
+  2.1G of a 4G tmpfs. That is a deployment cost *and* a tax on every
+  iteration of the work itself.
+- **A pool that must stay warm**: four runners at an 8G ceiling, on a VM,
+  around the clock, for a site most visitors will read rather than run.
+  PLAN §5 already concedes it is "a small free compute faucet."
+- **The lessons kept not fitting the tier.** Three Part 1 exercises had to
+  be retargeted off a database the `skeleton` template doesn't have.
+  `08-middleware`'s payoff was invisible until it was redesigned around a
+  response header, because app logs don't stream anywhere.
+  `09-configuration` can only be half-taught while `flight.yaml` stays
+  unwritable — and it has to stay unwritable, since it carries the host
+  binding the preview depends on. `07-static-assets` was blocked outright
+  by prefix-stripping, which needs per-runner hostnames to fix.
+- **The payoff was thinnest exactly where the cost was highest.** Part 1's
+  interactive value is watching "hello, flight" appear in an iframe;
+  `flight new` gets a learner there in two minutes on their own machine.
 
-- The article's own claim that a handler can return anything `Codable` is
-  **wrong**, and had been sitting in published prose since M0. Flight
-  requires an explicit `ResponseEncodable` conformance
-  (`error: ... requires that 'Greeting' conform to 'ResponseEncodable'`) —
-  the conformance is empty in practice, since there's a default
-  implementation for any `Encodable`, but it must be declared. Found by
-  compiling the article's own code block against the real template.
-  Both the prose and the solution file now say so, and the exercise gained
-  a short paragraph on why (plus the `Void` → 204 and `nil` → 404 rules,
-  verified from the same source).
-- `makeRepo()`-style silent no-op, app-tier edition: the vendored template
-  binds `server.host: 127.0.0.1`, unreachable from Caddy in another
-  container. The fix (`FLIGHT_SERVER_HOST=0.0.0.0`, since Flight layers
-  env over file config) was **verified as a real behavioral change, not
-  assumed from the config-key mapping**: run without it, `ss` shows
-  `127.0.0.1:8080`; run with it, `0.0.0.0:8080`. The plan had flagged
-  "whether the env source is even layered in by default" as the one
-  unverified assumption everything downstream rested on, with a
-  template-edit fallback ready. It wasn't needed.
+Contrast the snippet/db tier, which stays: one file, ~1.8s rebuilds, no
+proxy, no ports, no HTML — and `debugSQL` printing real SQL beside the
+Swift that produced it is something a static code block genuinely cannot
+do. That tier earns its keep; the app tier didn't.
 
-**Verified against real containers, with real output** (never a status
-code alone — the rule this file already sets):
+The economics differ from the obvious comparison, too: Svelte's tutorial
+runs in the browser at zero marginal cost per visitor. Ours needed a warm
+VM. Same idea, completely different bill.
 
-- **The preview route, standalone, before any of the Swift existed** — a
-  placeholder app on `runner-1:8080` answering `/preview/runner-1/hello`
-  through a real Caddy with the real Caddyfile, echoing back
-  `path-as-seen-by-app: /hello` to prove prefix-stripping actually
-  happened. `caddy adapt` confirms all four preview routes land *before*
-  the unconditional catch-all, and the other routes still dial their own
-  upstreams (`/`→site, `/api/*`→server).
-- **The whole app-tier sequence against the raw supervisor** (no server,
-  no site): `/lease` with `X-Tier: app` → multi-file `/write` → `/run`
-  streaming `build_output` → `build_done` → `run_output` →
-  `server_started`, **and then the stream closing, in 7.96s**. That
-  closing is the decoupling working: a stream still open at that point
-  would have meant `runApp` was awaiting the server and the entire
-  timeout analysis was wrong. `ps` confirms the server process outlives
-  the request that started it.
-- **Both routes through the whole chain**: `curl` via Caddy at
-  `/preview/runner-1/hello` and `/hello-json` returns `hello, flight` and
-  `{"message":"hello, flight"}` with `text/plain` and `application/json`
-  respectively — the exact `Content-Type` behavior the article claims.
-- **The write allowlist, on disk and not just in the response.**
-  `Package.swift` and a `../`-climbing path are both refused with 400 and
-  a message naming the editable roots; `grep` confirms `Package.swift` was
-  never modified and the climbing target was never created. (14 unit-level
-  cases were checked first, including the `Sources/AppEvil` prefix-
-  confusion case a naive `hasPrefix` would have allowed through.)
-- **The crash-at-boot path** — the one new failure mode the decoupled
-  stream introduces, so it was tested deliberately rather than assumed. A
-  second process squatting port 8080 makes the learner's app die during
-  startup; the run correctly reports `run_output` carrying the real
-  diagnostic (`App failed to start: bind... Address already in use`)
-  followed by `exited: 1`, **not** a false `server_started`. Without the
-  500ms grace check this would have claimed success and left a silently
-  broken preview.
-- **Reset keeps the warm build.** After `/reset`: the learner's file is
-  gone, the template's `HealthController.swift` is back, the server is
-  killed — and `.build` is still there at 1.2G. That's the whole point of
-  scoping the restore to the editable subtrees rather than replacing the
-  workspace.
-- **The snippet tier is unregressed.** A lease with *no* `X-Tier` header
-  still defaults to snippet, the old single-string `{"content": ...}`
-  write shape still works, and `02-data/07-joins` still produces its real
-  joined rows against real seeded Postgres and exits 0.
+**What was kept from the work**:
 
-**The warm-up cost, now measured rather than predicted**: 840.8s for the
-snippet workspace plus 653.3s for the app workspace — **1494s, 24.9
-minutes**, almost exactly the ~25 min the plan projected. Two warm
-`.build` trees occupy **2.1G of the 4G tmpfs (53%)**, which retroactively
-justifies raising it: the previous 2g would have run out. This is a
-one-time cost per container start (a warm rebuild is ~1.4s), but it is a
-real tax on the development loop, and the mitigation used here was simply
-not restarting the container between verification steps. Warming the two
-concurrently remains available and unused: at `cpus: 2.0` the builds would
-mostly contend rather than overlap, so it trades log legibility for
-perhaps a third off a cost that is already paid once.
+- **Part 1's content**, in PLAN §6's directory shape (`README.md` +
+  `meta.json` + `app-a`/`app-b`), rendering as prose. The solutions in
+  `app-b` are real and were compiled and curled, and they stay so CI can
+  materialise template + diff and build them.
+- **The bug-catching, which is where the value actually was.** Running the
+  content caught a `ResponseEncodable` error that had been wrong in
+  published prose since M0, an invisible-payoff exercise, and a genuine
+  upstream bug in flight-cli's `basics` template (fixed there, `be90caa`).
+  **None of that needed a live runner pool** — it needs CI that builds and
+  runs exercises, which is far cheaper than serving them.
+- The stale-build diagnostic and the `421` guard on `/api/*`, both of
+  which came out of the same period and apply regardless of tier.
 
-**Network topology**: a new `preview` network carries Caddy and the four
-runners' port 8080 and nothing else. Deliberately *not* Caddy joining
-`runner-internal`: that network also carries Postgres and every runner's
-supervisor control API (port 9000), none of which Caddy has any business
-reaching. Both networks stay `internal: true`.
-
-**The tier-mismatch re-lease path** — the one genuinely new piece of
-*server* logic — is verified too, in both directions, against a real
-server container: one cookie jar, `POST /api/session` (snippet) then
-`POST /api/session?tier=app` returns a **different** session id, and the
-first session is genuinely torn down rather than merely shadowed (a run
-against the old id answers 404). `previewPath` (`/preview/runner-1/`) is
-present on the app-tier response and absent from the snippet one. This
-matters because without it a learner arriving at a Part 1 exercise still
-holding a Part 2 session cookie would silently get a snippet workspace,
-and their code landing in the wrong project would look like a compiler
-error rather than a plumbing bug.
-
-**And the full browser-shaped path**, not just the supervisor API:
-`POST /api/session?tier=app` → `POST /api/session/write-files` (204) →
-`POST /api/session/run` (202) → the app answering on
-`/preview/runner-1/hello` and `/hello-json` through real Caddy with the
-right bodies and content types. That is the whole chain the iframe
-actually exercises — browser shape, server, runner, proxy — end to end.
-
-**Four more Part 1 exercises wired** (`01-bootstrap`, `03-parameters`,
-`04-request-bodies`, `05-responses`), joining `02-first-route` — the same
-batch-migrate step Part 2 took after `06-preloading`. Each solution was
-compiled *and curled* against the real template before being trusted, and
-the prose was corrected against that output rather than the other way
-round. One of them (`04-request-bodies`) was then re-verified through the
-whole production-shaped path — lease, multi-file write, run, and requests
-arriving via Caddy's `/preview/runner-1/` — which also covers something
-the M3 pilot never did: a **`POST` through `handle_path`**, body intact,
-including the 400 and 415 negotiation failures. The pilot only ever proxied
-GETs.
-
-The substantive content problem: Part 1 runs on the `skeleton` template,
-which has **no database**, but three of these exercises were written
-against `repo.one(Post...)`. Copying them across would have shipped code
-the tier physically cannot run. They were retargeted instead — an `Int`
-path parameter rather than a UUID lookup, a bounds check standing in for
-the row that isn't there — and where that substitution changes what's
-being taught, the prose says so and names Part 3 as where the real query
-arrives. This is worth expecting for the rest of Part 1 too: the
-curriculum was drafted before the tiers were real, and "which tier can
-actually run this" is a question each exercise now has to answer.
-
-**Then both remaining blockers came down, and Part 1 reached 7 of 9.**
-
-`08-middleware` needed multi-file editing, so the editor got it: it now
-takes a list of files, each holding its own CodeMirror `EditorState` so
-switching is a swap rather than a reload (cursor, scroll and undo history
-all survive), and a Run writes every buffer. The file list stays hidden
-for single-file exercises — one entry is furniture, not navigation — so
-the five already-wired exercises are visually unchanged. The exercise
-genuinely needed it rather than merely benefiting: its point is that
-registering a `@Middleware` type and enrolling it in a `pipeline { }` are
-deliberately *separate* steps, so a one-file version would have taught the
-opposite of the lesson. `app-a` ships `Main.swift` as the template has it,
-so the learner adds the block to real surrounding code.
-
-**Running it in the container caught a content defect no compile could
-have.** The exercise as written paid off in log lines — and a learner on
-this tier cannot see them: the app's stdout goes to the `/run` SSE stream,
-which closes at `server_started` by design (see the decoupling note
-above), so `RequestTiming`'s output goes nowhere they can look. The
-exercise would have "worked" while teaching nothing observable. Fixed by
-making the effect visible on the wire instead: the layer now also returns
-`X-Response-Time`, verified through the preview proxy on both a 200 and a
-404 — which is the *better* demonstration anyway, since the 404 proves the
-layer wraps dispatch rather than handlers (a request that matched no route
-has no handler to have wrapped). The log line stays, and the prose now
-says plainly that the header is what you can see from here and why.
-
-This is worth generalizing: **any exercise whose payoff is app log output
-is currently untestable by the learner**, and the `/logs` endpoint
-sketched in M3's plan is what would change that.
-
-**A stale site image silently claimed every new exercise was unwritten.**
-Reported from actually trying to use the thing, which is the only way it
-would have surfaced: `docker compose up -d` reuses an existing
-`flight-school-site` image, and one built before M3 has no
-`loadAppExercise` in it. It still reads the bind-mounted `content/`
-perfectly well — it just doesn't understand the directory shape, so every
-converted exercise fell through to the "coming soon" placeholder. A 200,
-a correct-looking page, and a completely false claim: exactly the failure
-class this file already has a hard rule about, arriving from a new
-direction.
-
-**And the sibling trap, found the same way**: `/api/session?tier=app`
-returning 404. Not a routing bug — the site container's own port was being
-used directly instead of Caddy's. `/api/*` and `/socket` are not SvelteKit
-routes at all; they belong to `server/`, and Caddy is the only thing that
-puts the two behind one origin. What makes it genuinely confusing rather
-than merely wrong is that *pages render perfectly* on that port, so the
-symptom looks like a broken endpoint rather than a wrong address. A
-catch-all `src/routes/api/[...path]/+server.ts` now answers `421
-Misdirected Request` naming the cause and the fix. It deliberately does
-not proxy: the site has no business knowing the backend's address, and
-inventing one there would give the app two ways to reach it that could
-disagree.
-
-One more hand-testing trap, documented rather than fixed because the fix
-isn't ours to make: `curl -X POST` with no `-d` sends neither
-`Content-Length` nor a body, and **Caddy holds that request open** rather
-than forwarding it, so the call appears to hang. Verified the backend
-answers the identical request immediately when reached directly, so this
-is Caddy's behaviour, not Flight's — and browsers always set
-`Content-Length`, so no client hits it. `curl -X POST -d ''` is the
-workaround, now in the README.
-
-Three fixes for the stale-image trap, because the documentation alone
-would not have been enough:
-`README.md` said "no rebuild needed" (true of content, misleading about
-code) and now says to pass `--build`, names the symptom, and notes that
-`site` can be rebuilt alone since the runner image costs ~25 minutes. The
-placeholder itself now distinguishes the two cases — a new
-`exerciseSourceExists` check is deliberately shape-*agnostic*, asking only
-"is there something on disk here?", so it will keep catching this for
-content shapes that don't exist yet; when content is present but
-unrenderable the page says so and names the rebuild command. Verified both
-branches against the real compose stack: an unreadable shape reports
-itself, and genuinely-unwritten content (`06-cookies`) still reads
-"coming soon". The README was also stale in claiming `server/` and
-`runner/` don't exist.
-
-`09-configuration` turned out to be only half-blocked. `@ConfigValue`'s
-`default:` form needs no yaml key at all, so a controller using both forms
-runs as-is: `app.name` resolves from `flight.yaml`, two absent keys fall
-back to their defaults, and the app starts anyway — which *is* the
-difference between the two forms, shown rather than described. The better
-half is the failure: misspelling `app.name` doesn't start-then-fail, it
-fails the build, with the plugin naming the key and both fixes. That error
-is quoted verbatim in the prose now, and teaches more than `@Settings`
-would have. `@Settings` stays prose, and the prose says why — it needs
-keys in `flight.yaml`, which stays outside the write allowlist on purpose:
-that file carries the host and port the preview depends on, so a stray
-edit would break the learner's own preview with no visible cause. Part 3,
-where the project is theirs, is where they write one for real.
-
-The remaining two are blocked on things this pass didn't touch:
-`06-cookies` on an upstream release (predates M3), and `07-static-assets`
-on preview prefix-stripping.
-
-**Left for follow-up, deliberately**: the rest of Part 1 and all of Part 3
-(`app+db`, which also needs the session database wired into the app
-template, unlike this tier). And two known limits, recorded in comments at
-the exact places they'd bite (`Caddyfile`, `AppEditor.svelte`) rather than
-only here: prefix-stripping breaks any app that emits its own URLs, which
-**will block `07-static-assets`** until each runner gets its own hostname
-(also PLAN §5's own "separate preview domain" hardening step); and the
-iframe `sandbox` is nominal rather than load-bearing, since `allow-scripts`
-plus `allow-same-origin` on same-origin content effectively disables it —
-acceptable at v1's trust level, but not something to mistake for
-isolation.
+Parts 1, 3 and 4 finish as prose plus a project the learner runs locally —
+which PLAN §1 already named as the degraded mode, and which turns out to
+be the right *primary* mode for anything bigger than a snippet.
 
 ## Explicitly deviated from PLAN.md §6, on purpose
 
