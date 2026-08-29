@@ -1019,6 +1019,54 @@ The remainder are prose by nature (Part 0's four, `06-actuator`,
 `11-flight-data`, and the three above) plus `07-static-assets` and the
 still-unwritten `06-cookies`.
 
+## 41 of 41 written; a framework bug found by the last one
+
+`06-cookies` — the exercise deliberately left unwritten since M0 because
+cookie support was unreleased — is written and verified. flight `v0.9.0`
+carries it (`8997a5a`), and the templates' `from: "0.7.0"` resolves there,
+so a reader's own `flight new` can reach it now. The article covers the
+whole progressive-enhancement login loop: `Response.seeOther` for the
+POST-redirect-GET, `settingCookie`, `request.cookie`, and clearing by
+overwriting with `Max-Age=0`. Verified by running it — logging in returns
+`303` with `Set-Cookie: who=Ada; Path=/; Max-Age=3600; HttpOnly;
+SameSite=Lax`, the follow-up request reads it back, and logout clears it.
+
+The defaults turned out to be the most interesting part to teach, so the
+article covers them explicitly: `HttpOnly` and `SameSite=Lax` are on by
+default, while `Secure` is deliberately *off* — a `Secure` cookie over
+plain HTTP is silently never set, which looks exactly like broken login
+logic on a loopback dev server.
+
+`07-static-assets` stays prose for now, and the reason is a **real bug in
+flight, found by trying to compile the article's own code**:
+`container.pipeline("assets") { }` with an empty block did not declare the
+lane, so the asset mount naming it failed at bootstrap — with an error
+that itself says "an empty block is legal". `pipeline(_:_:)` registered
+one entry per middleware, and `declaredMiddlewareLanes()` derives the lane
+set from those entries, so an empty block registered nothing and the lane
+left no trace. The empty lane is not a curiosity here: it is precisely
+what an asset mount wants, so a request for `app.js` pays for none of the
+auth and transaction binding the default lane carries.
+
+Fixed upstream in flight (`bd300c4`): `pipeline(_:_:)` now registers a
+marker per named lane, filtered out of `collectMiddleware(lane:)` so a
+request through an empty lane still runs nothing. The first attempt broke
+the existing two-modules-concatenate test — a fixed marker qualifier made
+the second declaration a duplicate registration — which is why the marker
+carries a per-call token. A regression test asserts the route serves and
+the lane composes to an empty chain; it was confirmed to fail without the
+fix, with exactly the original error. Full suite green at 970 tests.
+
+**`07-static-assets` can be verified as soon as flight cuts a release
+carrying that fix** — the templates resolve to the latest *tag*, and
+`v0.9.0` predates it. Until then its `app-b` is deliberately absent rather
+than written against something CI cannot reach.
+
+`curriculum.ts`'s runtime labels were also stale: Parts 1, 3 and 4 still
+claimed the `app`/`app+db` tiers that were removed. They are now `local`
+— real, CI-verified code the reader runs in their own project — and the
+type no longer offers tiers nothing serves.
+
 ## Explicitly deviated from PLAN.md §6, on purpose
 
 The plan's content layout has each exercise as a directory with

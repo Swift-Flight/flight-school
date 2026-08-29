@@ -19,7 +19,19 @@ export interface PartOutline {
 	slug: string;
 	title: string;
 	summary: string;
-	runtime: 'none' | 'snippet' | 'db' | 'app' | 'app+db';
+	/// How a part's exercises are meant to be run.
+	///
+	/// `snippet` is the only interactive one: those exercises carry a
+	/// sibling `.swift` file and get the embedded editor. `local` means the
+	/// code is real and CI-verified — each exercise keeps an `app-b`
+	/// solution built against a `flight new` template — but the reader runs
+	/// it in their own project rather than in the page. `none` is prose
+	/// with nothing to run.
+	///
+	/// `app`/`app+db` were execution tiers that got built and then removed;
+	/// see STATUS.md for why. Nothing serves them, so nothing should claim
+	/// them.
+	runtime: 'none' | 'snippet' | 'db' | 'local';
 	exercises: ExerciseOutline[];
 }
 
@@ -56,7 +68,7 @@ export const curriculum: PartOutline[] = [
 		slug: '01-basics',
 		title: 'Part 1 — Flight basics',
 		summary: 'Bootstrap, routing, requests and responses, middleware, configuration.',
-		runtime: 'app',
+		runtime: 'local',
 		exercises: [
 			{
 				slug: '01-bootstrap',
@@ -177,7 +189,7 @@ export const curriculum: PartOutline[] = [
 		slug: '03-intermediate',
 		title: 'Part 3 — Intermediate web',
 		summary: 'Auth brought not built, uploads, jobs, the actuator, and testing.',
-		runtime: 'app+db',
+		runtime: 'local',
 		exercises: [
 			{
 				slug: '01-repo-wiring',
@@ -220,7 +232,7 @@ export const curriculum: PartOutline[] = [
 		slug: '04-advanced',
 		title: 'Part 4 — Advanced: realtime and beyond',
 		summary: 'Channels, Presence, PubSub, and the capstone realtime board.',
-		runtime: 'app+db',
+		runtime: 'local',
 		exercises: [
 			{
 				slug: '01-websockets',

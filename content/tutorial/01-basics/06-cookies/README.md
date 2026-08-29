@@ -1,0 +1,93 @@
+---
+title: Cookies and redirects
+description: A progressive-enhancement login flow — Set-Cookie, See Other, and no JavaScript.
+order: 6
+---
+
+A cookie goes out by decorating a response, not by building headers:
+
+```swift
+@PostMapping("/login")
+func logIn(_ context: RequestContext, body: LoginForm) -> Response {
+    Response.seeOther("/me")
+        .settingCookie(Cookie(name: "who", value: body.name, maxAge: .seconds(3600)))
+}
+```
+
+and comes back in off the request:
+
+```swift
+@GetMapping("/me")
+func me(_ context: RequestContext) -> String {
+    guard let who = context.request.cookie("who") else {
+        return "not logged in"
+    }
+    return "hello, \(who)"
+}
+```
+
+That is the entire loop. `LoginForm` is a plain `Decodable`, so — exactly
+as in the request-bodies exercise — this handler serves an HTML `<form
+method="post">` and a JSON client identically, with no JavaScript
+anywhere.
+
+```bash
+curl -i -X POST 127.0.0.1:8080/login \
+  -H "Content-Type: application/x-www-form-urlencoded" -d "name=Ada"
+```
+```
+HTTP/1.1 303 See Other
+Location: /me
+Set-Cookie: who=Ada; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax
+```
+
+## Why `seeOther` and not just a 200
+
+`Response.seeOther(_:)` is a `303`, and the status matters: it turns the
+POST into a GET of `Location`. Reload the page you land on and you re-run
+that GET, not the POST — so no browser ever offers to re-submit the login.
+This is the redirect a form wants, and the reason it exists as its own
+constructor rather than something you assemble from a status code and a
+header.
+
+## The defaults are the interesting part
+
+Look at what came back on the wire against what the code asked for. The
+call named a name, a value, and a lifetime; the cookie arrived with
+`Path=/`, `HttpOnly`, and `SameSite=Lax` as well:
+
+- **`HttpOnly` is on by default.** The cookie is unreadable from
+  JavaScript, so an injected script can't exfiltrate it. Opting *out* is
+  possible and deliberate; forgetting to opt in is not a mistake you can
+  make here.
+- **`SameSite=Lax` by default**, which is what stops another origin's form
+  from POSTing as you while still letting an ordinary link into your site
+  arrive logged in.
+- **`Secure` is *off* by default**, and this is the one asymmetry worth
+  understanding rather than memorising. It is left to you because a
+  development server on loopback has no TLS, and a `Secure` cookie over
+  plain HTTP is silently never set at all — a failure that looks like your
+  login logic being broken. An explicitly insecure cookie in development
+  beats a mystery in every environment. Set `isSecure: true` in
+  production.
+
+## Clearing one
+
+There is no "delete cookie" call, because there is no such thing on the
+wire — you overwrite it with an empty value and a zero lifetime:
+
+```swift
+@PostMapping("/logout")
+func logOut(_ context: RequestContext) -> Response {
+    Response.seeOther("/me")
+        .settingCookie(Cookie(name: "who", value: "", maxAge: .seconds(0)))
+}
+```
+```
+Set-Cookie: who=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+```
+
+`Max-Age=0` tells the browser to drop it immediately. The path has to
+match the one it was set with, which is one more reason to leave `path`
+alone unless you have a reason: a cookie set at `/` and cleared at
+`/logout` is a cookie that never goes away.
