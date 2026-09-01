@@ -66,28 +66,28 @@ jobs:
       - name: Checkout flight
         uses: actions/checkout@v4
         with:
-          repository: Swift-Flight/flight
+          repository: Flight-Framework/flight
           ref: ${{ inputs.flight_ref || 'main' }}
           path: flight
 
       - name: Checkout hangar
         uses: actions/checkout@v4
         with:
-          repository: Swift-Flight/hangar
+          repository: Flight-Framework/hangar
           ref: ${{ inputs.hangar_ref || 'main' }}
           path: hangar
 
       - name: Checkout flight-data
         uses: actions/checkout@v4
         with:
-          repository: Swift-Flight/flight-data
+          repository: Flight-Framework/flight-data
           ref: ${{ inputs.flight_data_ref || 'main' }}
           path: flight-data
 
       - name: Checkout swift-changeset
         uses: actions/checkout@v4
         with:
-          repository: Swift-Flight/swift-changeset
+          repository: Flight-Framework/swift-changeset
           ref: ${{ inputs.swift_changeset_ref || 'main' }}
           path: swift-changeset
 

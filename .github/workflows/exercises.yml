@@ -52,7 +52,7 @@ jobs:
       - name: Check out flight-cli for its templates
         uses: actions/checkout@v4
         with:
-          repository: Swift-Flight/flight-cli
+          repository: Flight-Framework/flight-cli
           path: flight-cli
 
       # The swift image carries no python3 and no rsync — both verified

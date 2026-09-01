@@ -15,7 +15,7 @@
 		<nav>
 			<a href="/tutorial">Tutorial</a>
 			<a href="/guides">Guides</a>
-			<a href="https://github.com/Swift-Flight/flight">Flight ↗</a>
+			<a href="https://github.com/Flight-Framework/flight">Flight ↗</a>
 		</nav>
 	</header>
 
@@ -25,7 +25,7 @@
 
 	<footer>
 		<p>
-			Flight School is <a href="https://github.com/Swift-Flight/flight-school">open source</a>.
+			Flight School is <a href="https://github.com/Flight-Framework/flight-school">open source</a>.
 			Every exercise here is downloadable as a plain SwiftPM package — the site never has to be
 			the only way to learn this.
 		</p>

@@ -20,7 +20,7 @@
 		<p class="note">
 			This guide is planned but not written yet. It's tracked in the site's content manifest
 			(<code>src/lib/guides.ts</code>) — see
-			<a href="https://github.com/Swift-Flight/flight-school">the repo</a> if you'd like to write it.
+			<a href="https://github.com/Flight-Framework/flight-school">the repo</a> if you'd like to write it.
 		</p>
 	</div>
 {/if}

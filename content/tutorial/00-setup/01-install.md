@@ -35,7 +35,7 @@ swift --version
 which, on a Swift project, is one command:
 
 ```bash
-git clone https://github.com/Swift-Flight/flight-cli.git
+git clone https://github.com/Flight-Framework/flight-cli.git
 cd flight-cli
 swift build -c release
 cp .build/release/flight ~/.local/bin/

@@ -22,7 +22,7 @@
     {
       "identity" : "flight",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Swift-Flight/flight.git",
+      "location" : "https://github.com/Flight-Framework/flight.git",
       "state" : {
         "revision" : "504da7aa569c831e1a1de4da624eb1f0bd33856d",
         "version" : "0.9.0"

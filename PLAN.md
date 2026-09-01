@@ -1,6 +1,6 @@
 # Flight School — interactive tutorial + documentation site
 
-**Status: plan, not implementation.** Own repo under the Swift-Flight org.
+**Status: plan, not implementation.** Own repo under the Flight-Framework org.
 Proposed name: `flight-school` (alternatives: `flight-learn`, `learn-flight`).
 The name matters less than reserving it before content links bake it in.
 
@@ -523,7 +523,7 @@ modules into one navigable site. `flight-data` is in the same state.
    Pages) and a `pages: write` / `id-token: write` permissions block on
    the job.
 4. **Hosting split, deliberately:** reference docs deploy to GitHub
-   Pages (`swift-flight.github.io/flight-school/` or per-repo — decide
+   Pages (`flight-framework.github.io/flight-school/` or per-repo — decide
    whether Flight School aggregates `flight` + `flight-data` + Hangar's
    docs into one Pages site or links out to each repo's own), fully
    decoupled from the tutorial site's self-hosted VM (§9). This is a

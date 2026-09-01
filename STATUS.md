@@ -189,7 +189,7 @@ the manifest before assuming it's written.
   `actions/checkout@v4` before the three named ones. Also fixed in the
   same pass: the generated index page linked to `flight-school.dev`, a
   domain that isn't configured (confirmed via the Pages API — no CNAME;
-  the real URL is `swift-flight.github.io/flight-school/`, and the
+  the real URL is `flight-framework.github.io/flight-school/`, and the
   actual SvelteKit site has no fixed production domain yet either) —
   now links to the GitHub repository instead of a guessed-at domain.
   (3) **The serious one, found by a user, not by this process**: the

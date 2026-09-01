@@ -82,7 +82,7 @@ Both the data source and the cache are traits away from a distributed
 backend, and switching is a module choice, never a code change:
 
 ```swift
-.package(url: "https://github.com/Swift-Flight/flight-data.git",
+.package(url: "https://github.com/Flight-Framework/flight-data.git",
          from: "0.3.0", traits: ["Postgres", "Valkey"])
 ```
 

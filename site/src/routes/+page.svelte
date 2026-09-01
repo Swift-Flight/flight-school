@@ -9,9 +9,9 @@
 <section class="hero">
 	<h1>Learn Flight by building with it.</h1>
 	<p class="lead">
-		An interactive tutorial and reference for <a href="https://github.com/Swift-Flight/flight"
+		An interactive tutorial and reference for <a href="https://github.com/Flight-Framework/flight"
 			>Flight</a
-		>, <a href="https://github.com/Swift-Flight/hangar">Hangar</a>, and Changeset — from your
+		>, <a href="https://github.com/Flight-Framework/hangar">Hangar</a>, and Changeset — from your
 		first route to a working realtime app, and a plain-documentation track written at the level
 		of detail Phoenix and Ecto readers expect.
 	</p>

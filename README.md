@@ -1,8 +1,8 @@
 # Flight School
 
 An interactive tutorial and documentation site for
-[Flight](https://github.com/Swift-Flight/flight),
-[Hangar](https://github.com/Swift-Flight/hangar), and Changeset — in the
+[Flight](https://github.com/Flight-Framework/flight),
+[Hangar](https://github.com/Flight-Framework/hangar), and Changeset — in the
 mold of [Svelte's tutorial](https://svelte.dev/tutorial), with a parallel
 plain-documentation track written at the level of detail Phoenix and Ecto
 readers expect.
