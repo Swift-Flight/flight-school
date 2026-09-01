@@ -65,7 +65,7 @@ socket.push(topic: event.topic, event: "ack", payload: .object([:]))   // just t
 
 `ChannelBroadcaster` is an ordinary container singleton — anything holding
 one can broadcast, not only a `Channel` implementation. An ordinary
-`@PostMapping` handler resolves it exactly the same way to fan an HTTP
+`@PostRoute` handler resolves it exactly the same way to fan an HTTP
 write out to socket subscribers:
 
 ```swift
@@ -81,7 +81,7 @@ and no retry puts that back.
 ## Raw WebSockets, measured against this
 
 Channels is built on `WebSocketUpgradeHandler`, not a parallel mechanism
-to it — `@WebSocketMapping` plus a raw upgrade handler is still there for
+to it — `@WebSocketRoute` plus a raw upgrade handler is still there for
 the cases that don't need topics, presence, or a browser client. What
 that costs to build by hand has actually been measured: a benchmark
 project built the same realtime feature twice, once on Channels and once

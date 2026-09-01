@@ -64,7 +64,7 @@ object to have bypassed:
 ```swift
 @Service
 final class PricingService {
-    @Autowired var repository: PriceRepository
+    @Inject var repository: PriceRepository
 
     @Cacheable(namespace: "prices", ttl: .seconds(900))
     func price(for productID: ProductID, in region: Region) async throws -> Price {

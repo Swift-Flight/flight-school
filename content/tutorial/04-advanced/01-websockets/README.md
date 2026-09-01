@@ -9,7 +9,7 @@ A raw upgrade is one protocol, one method:
 ```swift
 @Controller
 struct EchoSocketController {
-    @WebSocketMapping("/echo/:room")
+    @WebSocketRoute("/echo/:room")
     func echo(_ context: RequestContext) throws -> any WebSocketUpgradeHandler {
         EchoHandler(room: context.pathParam("room") ?? "?")
     }
@@ -34,7 +34,7 @@ struct EchoHandler: WebSocketUpgradeHandler {
 }
 ```
 
-`@WebSocketMapping` generates a route exactly like `@GetMapping` does, just
+`@WebSocketRoute` generates a route exactly like `@GetRoute` does, just
 tagged as an upgrade; the transport performs the HTTP 101 handshake and
 hands your handler the frame stream. `WebSocketConnection` owns
 fragmentation reassembly, masking, and the close handshake — you only ever

@@ -1,6 +1,6 @@
 ---
 title: Your first route
-description: "@Controller and @GetMapping, and why there is no route table to find."
+description: "@Controller and @GetRoute, and why there is no route table to find."
 order: 2
 ---
 
@@ -10,7 +10,7 @@ import FlightWeb
 
 @Controller
 struct GreetingController {
-    @GetMapping("/hello")
+    @GetRoute("/hello")
     func hello(_ context: RequestContext) -> String {
         "hello, flight"
     }
@@ -26,7 +26,7 @@ curl http://127.0.0.1:8080/hello
 ```
 
 No registration call, no route table entry, nothing added to `AppModule`.
-`@Controller` marks the type; `@GetMapping` marks the method; the
+`@Controller` marks the type; `@GetRoute` marks the method; the
 registration plugin (from the previous exercise) finds both at build time
 and generates the wiring. If you're looking for "where do I add my new
 route," the answer is: you don't, past writing the method.
@@ -42,7 +42,7 @@ struct Greeting: Codable, ResponseEncodable {
     let message: String
 }
 
-@GetMapping("/hello-json")
+@GetRoute("/hello-json")
 func helloJSON(_ context: RequestContext) -> Greeting {
     Greeting(message: "hello, flight")
 }

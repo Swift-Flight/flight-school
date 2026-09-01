@@ -7,7 +7,7 @@ struct ConfigController {
     @ConfigValue("app.maintenanceMode", default: false) var maintenanceMode: Bool
     @ConfigValue("app.greeting", default: "hello") var greeting: String
 
-    @GetMapping("/config")
+    @GetRoute("/config")
     func show(_ context: RequestContext) -> String {
         "name=\(appName) maintenance=\(maintenanceMode) greeting=\(greeting)"
     }

@@ -10,12 +10,12 @@ handler that needs its own status code or headers constructs a `Response`
 directly:
 
 ```swift
-@PostMapping("/posts")
+@PostRoute("/posts")
 func create(_ context: RequestContext, body: CreatePost) throws -> Response {
     try Response.json(["id": newID.uuidString], status: .created)
 }
 
-@DeleteMapping("/posts/:id")
+@DeleteRoute("/posts/:id")
 func delete(_ context: RequestContext) -> Response {
     .noContent
 }
@@ -32,7 +32,7 @@ decoder, no `context.request.body`:
 ```swift
 struct CreatePost: Decodable { let title: String; let body: String }
 
-@PostMapping("/posts")
+@PostRoute("/posts")
 func create(_ context: RequestContext, body: CreatePost) throws -> Response {
     try Response.json(["title": body.title], status: .created)
 }
@@ -77,7 +77,7 @@ everything.
 ## Where to go next
 
 - [Routing and Controllers](/guides/routing-and-controllers) — `@Controller`
-  and `@GetMapping`, and the parameters a handler can pull from a request.
+  and `@GetRoute`, and the parameters a handler can pull from a request.
 - [Configuration](/guides/configuration) — the layered config a running
   app reads its own settings from.
 

@@ -5,7 +5,7 @@ order: 3
 ---
 
 ```swift
-@GetMapping("/issues/:number")
+@GetRoute("/issues/:number")
 func show(_ context: RequestContext) -> String {
     guard let number = context.pathParam("number") else {
         return "missing number"  // in practice: see the exercise on HTTPError
@@ -21,7 +21,7 @@ slug, so converting it to the type you actually want is your call, made
 explicitly:
 
 ```swift
-@GetMapping("/issues/:number")
+@GetRoute("/issues/:number")
 func show(_ context: RequestContext) throws -> String {
     guard let text = context.pathParam("number"), let number = Int(text) else {
         throw HTTPError(.badRequest, "issue number must be an integer")
@@ -48,7 +48,7 @@ routes like this one.)
 Same shape, different source:
 
 ```swift
-@GetMapping("/issues")
+@GetRoute("/issues")
 func index(_ context: RequestContext) -> String {
     let status = context.request.queryParam("status") ?? "all"
     return "issues filtered by status: \(status)"

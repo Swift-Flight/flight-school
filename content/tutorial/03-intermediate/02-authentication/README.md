@@ -34,7 +34,7 @@ hand-rolled here.
 ## Reading who's making the request
 
 ```swift
-@GetMapping("/documents")
+@GetRoute("/documents")
 func documents(_ context: RequestContext) async throws -> Response {
     let principal = try context.requirePrincipal()   // 401 when absent
     return try Response.json(try await repo.all(
@@ -53,7 +53,7 @@ resolved fresh per request, never shared or leaked between them — so a
 @Service
 struct DocumentService {
     // flight:hand-registered — FlightSecurityModule registers PrincipalHolder
-    @Autowired var identity: PrincipalHolder
+    @Inject var identity: PrincipalHolder
 
     func currentUsersDocuments() async throws -> [Document] {
         guard let principal = identity.principal else { throw SecurityError.unauthenticated }
@@ -63,7 +63,7 @@ struct DocumentService {
 ```
 
 A `struct`, not a `final class`: `@Service`'s expansion requires
-`Sendable`, and a class holding a mutable `@Autowired` property cannot be
+`Sendable`, and a class holding a mutable `@Inject` property cannot be
 — the error names `Sendable` at the macro rather than at the property, so
 it reads more mysteriously than it is. Value types are the default shape
 for components across Flight for exactly this reason.

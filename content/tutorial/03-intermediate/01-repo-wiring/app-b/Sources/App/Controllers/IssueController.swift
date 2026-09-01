@@ -5,9 +5,9 @@ import Foundation
 
 @Controller
 struct IssueController {
-    @Autowired var repo: Repo
+    @Inject var repo: Repo
 
-    @GetMapping("/issues/:id")
+    @GetRoute("/issues/:id")
     func show(_ context: RequestContext) async throws -> Issue {
         guard let idText = context.pathParam("id"), let id = UUID(uuidString: idText) else {
             throw HTTPError(.badRequest, "malformed id")

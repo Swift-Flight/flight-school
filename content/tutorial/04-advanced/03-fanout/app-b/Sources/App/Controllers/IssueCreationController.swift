@@ -15,7 +15,7 @@ struct IssueResponse: Codable, ResponseEncodable {
 
 @Controller
 struct IssueCreationController {
-    @PostMapping("/projects/:key/issues")
+    @PostRoute("/projects/:key/issues")
     func create(_ context: RequestContext, body: CreateIssueRequest) async throws -> Response {
         guard let key = context.pathParam("key") else {
             throw HTTPError(.notFound, "no such project")

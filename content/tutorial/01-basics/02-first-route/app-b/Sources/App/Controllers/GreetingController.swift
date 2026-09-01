@@ -7,12 +7,12 @@ struct Greeting: Codable, ResponseEncodable {
 
 @Controller
 struct GreetingController {
-    @GetMapping("/hello")
+    @GetRoute("/hello")
     func hello(_ context: RequestContext) -> String {
         "hello, flight"
     }
 
-    @GetMapping("/hello-json")
+    @GetRoute("/hello-json")
     func helloJSON(_ context: RequestContext) -> Greeting {
         Greeting(message: "hello, flight")
     }

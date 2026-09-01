@@ -979,7 +979,7 @@ It found five things, all of which had shipped:
   nothing else; the demo template uses `principal.subject` throughout.
 - **`@Service final class` cannot compile** (`02-authentication`).
   `@Service`'s expansion requires `Sendable`, and a class holding a mutable
-  `@Autowired` property cannot be one. The error names `Sendable` at the
+  `@Inject` property cannot be one. The error names `Sendable` at the
   macro rather than the property, which makes it read as stranger than it
   is. A `struct` is the shape the templates use everywhere.
 - **`Channel` is ambiguous in the capstone.** `FlightDataPostgres`

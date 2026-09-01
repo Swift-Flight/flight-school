@@ -5,14 +5,14 @@ import Foundation
 
 @Controller
 struct ActivityController {
-    @GetMapping("/events")
+    @GetRoute("/events")
     func events(_ context: RequestContext) -> Response {
         .serverSentEvents { events in
             events.send(data: "hello", event: "greeting")
         }
     }
 
-    @GetMapping("/activity")
+    @GetRoute("/activity")
     func activity(_ context: RequestContext) throws -> Response {
         let pubsub = try context.resolve((any PubSub).self)
         return .serverSentEvents { events in

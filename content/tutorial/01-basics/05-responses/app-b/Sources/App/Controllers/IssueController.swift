@@ -8,7 +8,7 @@ struct IssueSummary: Codable, ResponseEncodable {
 
 @Controller
 struct IssueController {
-    @GetMapping("/issues/:number")
+    @GetRoute("/issues/:number")
     func show(_ context: RequestContext) throws -> Response {
         guard let text = context.pathParam("number"), let number = Int(text) else {
             throw HTTPError(.badRequest, "issue number must be an integer")
@@ -19,12 +19,12 @@ struct IssueController {
         return try Response.json(IssueSummary(number: number, status: "open"))
     }
 
-    @PostMapping("/issues")
+    @PostRoute("/issues")
     func create(_ context: RequestContext) throws -> Response {
         try Response.json(IssueSummary(number: 201, status: "open"), status: .created)
     }
 
-    @DeleteMapping("/issues/:number")
+    @DeleteRoute("/issues/:number")
     func delete(_ context: RequestContext) -> Response {
         .noContent
     }

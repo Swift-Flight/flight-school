@@ -82,7 +82,7 @@ import FlightWeb
 struct StatusController {
     @ConfigValue("app.name") var appName: String
 
-    @GetMapping("/status")
+    @GetRoute("/status")
     func status(_ context: RequestContext) -> String {
         "\(appName): up"
     }

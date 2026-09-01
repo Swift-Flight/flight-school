@@ -4,7 +4,7 @@ import FlightSecurityCore
 @Service
 struct DocumentService {
     // flight:hand-registered — FlightSecurityModule registers PrincipalHolder
-    @Autowired var identity: PrincipalHolder
+    @Inject var identity: PrincipalHolder
 
     func currentUsersSubject() throws -> String {
         guard let principal = identity.principal else {

@@ -14,12 +14,12 @@ struct IssueSummary: Codable, ResponseEncodable {
     let status: String
 }
 
-@PostMapping("/issues")
+@PostRoute("/issues")
 func create(_ context: RequestContext) throws -> Response {
     try Response.json(IssueSummary(number: 201, status: "open"), status: .created)
 }
 
-@DeleteMapping("/issues/:number")
+@DeleteRoute("/issues/:number")
 func delete(_ context: RequestContext) -> Response {
     .noContent
 }
@@ -41,7 +41,7 @@ A handler doesn't need to catch its own errors to answer with the right
 status code — it throws, and names the status when it does:
 
 ```swift
-@GetMapping("/issues/:number")
+@GetRoute("/issues/:number")
 func show(_ context: RequestContext) throws -> Response {
     guard let text = context.pathParam("number"), let number = Int(text) else {
         throw HTTPError(.badRequest, "issue number must be an integer")

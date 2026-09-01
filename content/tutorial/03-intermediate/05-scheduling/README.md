@@ -10,7 +10,7 @@ import Foundation          // the expansion references Date — see below
 
 @Scheduler
 struct ReportJobs {
-    @Autowired var reports: ReportService
+    @Inject var reports: ReportService
 
     @Scheduled("0 0 3 * * *")
     func nightlyRollup() async throws {
@@ -30,13 +30,13 @@ though nothing you wrote mentions it. Omit it and the error is `cannot
 find 'Foundation' in scope`, pointing into macro-expanded code rather than
 at any line you typed.
 
-`@Scheduler` marks an ordinary singleton component — `@Autowired` resolves
+`@Scheduler` marks an ordinary singleton component — `@Inject` resolves
 its dependencies exactly like any other type. `@Scheduled` takes either a
 six-field cron expression (seconds first: `0 0 3 * * *` is 03:00 UTC every
 day) or a fixed interval measured from the end of the previous run, never
 wall-clock. Either way the method itself takes no parameters and returns
 `Void` — there's no caller to hand it arguments, so anything it needs comes
-through `@Autowired` on the enclosing type instead. The cron string must be
+through `@Inject` on the enclosing type instead. The cron string must be
 a literal: that's what lets the build plugin validate it against the same
 parser that runs it, so a malformed expression is a build error, not a job
 that silently never fires.

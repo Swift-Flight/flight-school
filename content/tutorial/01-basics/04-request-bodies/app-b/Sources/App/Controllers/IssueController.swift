@@ -8,7 +8,7 @@ struct NewIssue: Decodable {
 
 @Controller
 struct IssueController {
-    @PostMapping("/issues")
+    @PostRoute("/issues")
     func create(_ context: RequestContext, body: NewIssue) throws -> Response {
         try Response.json(
             ["title": body.title, "priority": body.priority], status: .created)

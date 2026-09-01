@@ -8,14 +8,14 @@ struct LoginForm: Decodable {
 
 @Controller
 struct SessionController {
-    @PostMapping("/login")
+    @PostRoute("/login")
     func logIn(_ context: RequestContext, body: LoginForm) -> Response {
         Response.seeOther("/me")
             .settingCookie(
                 Cookie(name: "who", value: body.name, maxAge: .seconds(3600)))
     }
 
-    @GetMapping("/me")
+    @GetRoute("/me")
     func me(_ context: RequestContext) -> String {
         guard let who = context.request.cookie("who") else {
             return "not logged in"
@@ -23,7 +23,7 @@ struct SessionController {
         return "hello, \(who)"
     }
 
-    @PostMapping("/logout")
+    @PostRoute("/logout")
     func logOut(_ context: RequestContext) -> Response {
         Response.seeOther("/me")
             .settingCookie(Cookie(name: "who", value: "", maxAge: .seconds(0)))

@@ -13,7 +13,7 @@ import FlightWeb
 
 @Controller
 struct GreetingController {
-    @GetMapping("/hello")
+    @GetRoute("/hello")
     func hello(_ context: RequestContext) -> String {
         "hello, flight"
     }
@@ -22,7 +22,7 @@ struct GreetingController {
 
 That's the whole registration. No route table to find and edit, no call
 that lists this path anywhere else — `@Controller` marks the type,
-`@GetMapping` marks the method, and `FlightRegistrationPlugin` (a build
+`@GetRoute` marks the method, and `FlightRegistrationPlugin` (a build
 plugin, not a runtime scan) finds both at compile time and generates the
 wiring. Adding a route means writing a method; it never means finding
 where routes are registered.
@@ -36,7 +36,7 @@ shapes:
 ```swift
 struct Greeting: Codable { let message: String }
 
-@GetMapping("/hello-json")
+@GetRoute("/hello-json")
 func helloJSON(_ context: RequestContext) -> Greeting {
     Greeting(message: "hello, flight")
 }
@@ -49,7 +49,7 @@ construct a `Response` directly (see
 ## Path and query parameters
 
 ```swift
-@GetMapping("/posts/:id")
+@GetRoute("/posts/:id")
 func show(_ context: RequestContext) async throws -> Post {
     guard let idText = context.pathParam("id"), let id = UUID(uuidString: idText) else {
         throw HTTPError(.badRequest, "malformed id")
@@ -71,7 +71,7 @@ Query parameters read the same way, from the request rather than the
 route's match:
 
 ```swift
-@GetMapping("/posts")
+@GetRoute("/posts")
 func index(_ context: RequestContext) -> String {
     let onlyPublished = context.request.queryParam("published") == "true"
     return "published only: \(onlyPublished)"
@@ -83,10 +83,10 @@ func index(_ context: RequestContext) -> String {
 ```swift
 @Controller("/users")
 struct UserController {
-    @GetMapping("/")           // → GET /users
+    @GetRoute("/")           // → GET /users
     func index(_ context: RequestContext) -> [User] { ... }
 
-    @GetMapping("/:id")        // → GET /users/:id
+    @GetRoute("/:id")        // → GET /users/:id
     func show(_ context: RequestContext) -> User { ... }
 }
 ```
@@ -99,7 +99,7 @@ not a trailing-slash variant of it.
 
 Every handler's first parameter, resolved for you — never something you
 construct. It's the single access point for the current request: path
-parameters, container components scoped to this request (`@Autowired`
+parameters, container components scoped to this request (`@Inject`
 works the same way inside a controller as anywhere else), and the request
 logger.
 

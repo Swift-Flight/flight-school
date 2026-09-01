@@ -4,7 +4,7 @@ import Foundation
 
 @Scheduler
 struct ReportJobs {
-    @Autowired var reports: ReportService
+    @Inject var reports: ReportService
 
     @Scheduled("0 0 3 * * *")
     func nightlyRollup() async throws {

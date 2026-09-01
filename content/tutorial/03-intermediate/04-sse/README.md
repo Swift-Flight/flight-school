@@ -5,7 +5,7 @@ order: 4
 ---
 
 ```swift
-@GetMapping("/events")
+@GetRoute("/events")
 func events(_ context: RequestContext) -> Response {
     .serverSentEvents { events in
         events.send(data: "hello", event: "greeting")
@@ -13,7 +13,7 @@ func events(_ context: RequestContext) -> Response {
 }
 ```
 
-An SSE endpoint is an ordinary `@GetMapping` handler — no upgrade, no
+An SSE endpoint is an ordinary `@GetRoute` handler — no upgrade, no
 separate protocol handshake, just a response whose body stays open.
 `.serverSentEvents` sets `Content-Type: text/event-stream` and
 `Cache-Control: no-cache` for you, and hands the closure a writer rather
@@ -27,7 +27,7 @@ your data can't forge an extra field.
 to stop a loop that's producing from something else, like a subscription:
 
 ```swift
-@GetMapping("/activity")
+@GetRoute("/activity")
 func activity(_ context: RequestContext) throws -> Response {
     let pubsub = try context.resolve((any PubSub).self)
     return .serverSentEvents { events in

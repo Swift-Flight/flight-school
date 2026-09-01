@@ -57,7 +57,7 @@ key — `pageSize` binds `posts.page-size`. Resolve it like any other
 component:
 
 ```swift
-@Autowired var settings: PostsSettings
+@Inject var settings: PostsSettings
 ```
 
 A property with no default is required, checked at compile time exactly

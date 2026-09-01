@@ -7,7 +7,7 @@ order: 6
 A cookie goes out by decorating a response, not by building headers:
 
 ```swift
-@PostMapping("/login")
+@PostRoute("/login")
 func logIn(_ context: RequestContext, body: LoginForm) -> Response {
     Response.seeOther("/me")
         .settingCookie(Cookie(name: "who", value: body.name, maxAge: .seconds(3600)))
@@ -17,7 +17,7 @@ func logIn(_ context: RequestContext, body: LoginForm) -> Response {
 and comes back in off the request:
 
 ```swift
-@GetMapping("/me")
+@GetRoute("/me")
 func me(_ context: RequestContext) -> String {
     guard let who = context.request.cookie("who") else {
         return "not logged in"
@@ -77,7 +77,7 @@ There is no "delete cookie" call, because there is no such thing on the
 wire — you overwrite it with an empty value and a zero lifetime:
 
 ```swift
-@PostMapping("/logout")
+@PostRoute("/logout")
 func logOut(_ context: RequestContext) -> Response {
     Response.seeOther("/me")
         .settingCookie(Cookie(name: "who", value: "", maxAge: .seconds(0)))

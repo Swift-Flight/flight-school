@@ -12,7 +12,7 @@ struct NewIssue: Decodable {
     let priority: String
 }
 
-@PostMapping("/issues")
+@PostRoute("/issues")
 func create(_ context: RequestContext, body: NewIssue) throws -> Response {
     // body.title, body.priority — already decoded, already typed
     try Response.json(["title": body.title, "priority": body.priority], status: .created)

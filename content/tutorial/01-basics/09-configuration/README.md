@@ -39,7 +39,7 @@ struct ConfigController {
     @ConfigValue("app.maintenanceMode", default: false) var maintenanceMode: Bool
     @ConfigValue("app.greeting", default: "hello") var greeting: String
 
-    @GetMapping("/config")
+    @GetRoute("/config")
     func show(_ context: RequestContext) -> String {
         "name=\(appName) maintenance=\(maintenanceMode) greeting=\(greeting)"
     }
@@ -93,9 +93,9 @@ convention. Resolve it exactly like any other component:
 ```swift
 @Controller
 struct IssueController {
-    @Autowired var settings: IssuesSettings
+    @Inject var settings: IssuesSettings
 
-    @GetMapping("/issues")
+    @GetRoute("/issues")
     func index(_ context: RequestContext) -> String {
         "page size: \(settings.pageSize)"
     }

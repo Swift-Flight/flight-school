@@ -10,9 +10,9 @@ app, a controller just asks for one:
 ```swift
 @Controller
 struct IssueController {
-    @Autowired var repo: Repo
+    @Inject var repo: Repo
 
-    @GetMapping("/issues/:id")
+    @GetRoute("/issues/:id")
     func show(_ context: RequestContext) async throws -> Issue {
         guard let idText = context.pathParam("id"), let id = UUID(uuidString: idText) else {
             throw HTTPError(.badRequest, "malformed id")
@@ -30,7 +30,7 @@ the predicate haven't changed at all, only where the `Repo` comes from.
 
 No connection pool in sight — `flight-data`'s Postgres module registers
 `Repo` as a *scoped* component, resolved fresh per request, and every
-`@Autowired var repo: Repo` in the same request resolves to the same
+`@Inject var repo: Repo` in the same request resolves to the same
 instance.
 
 ## Why "the same instance" is the whole point

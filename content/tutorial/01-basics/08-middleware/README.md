@@ -24,7 +24,7 @@ It both logs the timing and returns it as a header, so you can see the
 layer working with `curl -i` as well as in the log.
 
 `@Middleware` registers `RequestTiming` as an ordinary singleton component —
-`@Autowired` can resolve it, a test can construct it directly — exactly like
+`@Inject` can resolve it, a test can construct it directly — exactly like
 `@Component`. What it deliberately does *not* do is enroll the type in any
 pipeline. That's a separate, explicit step:
 

@@ -8,7 +8,7 @@ order: 3
 reaching it requires being inside a channel at all:
 
 ```swift
-@PostMapping("/projects/:key/issues")
+@PostRoute("/projects/:key/issues")
 func create(_ context: RequestContext, body: CreateIssueRequest) async throws -> Response {
     guard let key = context.pathParam("key"), let project = try await db.findProject(byKey: key) else {
         throw HTTPError(.notFound, "no such project")
@@ -23,7 +23,7 @@ func create(_ context: RequestContext, body: CreateIssueRequest) async throws ->
 }
 ```
 
-Nothing here is a `Channel` — it's an ordinary `@PostMapping` handler that
+Nothing here is a `Channel` — it's an ordinary `@PostRoute` handler that
 happens to resolve the same broadcaster a channel would. The handler
 doesn't know or care whether anyone is subscribed; if the project's board
 is open in a browser somewhere, `issue_created` reaches it exactly as if

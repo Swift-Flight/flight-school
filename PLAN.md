@@ -307,7 +307,7 @@ locally, and how the in-browser workspace corresponds to it.
 
 **Part 1 — Flight basics** *(runtime: app)*
 Bootstrap, modules, and the container (what `flightRegisterAll` wires) ·
-first route with `@Controller`/`@GetMapping` · path/query parameters ·
+first route with `@Controller`/`@GetRoute` · path/query parameters ·
 request bodies and content negotiation (JSON *and* forms out of the box —
 the round-1 benchmark finding, taught as a feature) · responses, status
 codes, `HTTPError` · cookies and redirects (the progressive-enhancement
